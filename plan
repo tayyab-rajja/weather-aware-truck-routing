@@ -1,0 +1,91 @@
+# Weather-Aware Truck Routing — Build Plan
+
+## Goal (in scope only)
+
+Build a **React + Django** app where a driver enters origin, destination, departure date/time, and load weight; the app returns **3 routes**, weather-sampled checkpoints, risk scores (with load rules), a **recommended route**, a map of all of that, and a **corridor weather heatmap with a 48-hour forecast slider**.
+
+**Out of scope:** HOS/ELD logs, multi-stop pickup chains, auth, social features, truck animations, anything not in the brief. Prioritize the rubric: **40% logic → 35% map/heatmap → 10% code quality → 5% docs/Loom**.
+
+## Decoded rules (from garbled MD — treat as source of truth)
+
+**Risk bands** (worst of wind / rain / snow at a checkpoint; then apply load overrides):
+
+| Level | Wind (mph) | Rain (in/hr) | Snow (in/hr) |
+| --- | --- | --- | --- |
+| Low | <25 | <0.10 | <0.5 |
+| Moderate | 25–34 | 0.10–0.25 | 0.5–1.0 |
+| High | 35–44 | 0.25–0.50 | 1.0–2.0 |
+| Severe | 45–54 | 0.50–1.00 | 2.0–3.0 |
+| No Travel | ≥55 | >1.00 | >3.0 |
+
+**Load overrides:**
+
+- Wind **≥55 mph** → **No Travel** (any load)
+- Wind **45–54 mph** and weight **>30,000 lb** → **No Travel**
+- Wind **35–44 mph** and weight **>40,000 lb** → **Severe**
+
+**Recommendation order (strict):** fewest Severe miles → fewest High miles → lowest average risk → shortest travel time.
+
+**Doc typo:** `0648 hour` = **48-hour** forecast slider.
+
+## Locked stack
+
+| Piece | Choice | Why |
+| --- | --- | --- |
+| Frontend | Vite + React + TypeScript | Required React, fast UI |
+| Map | MapLibre GL + free basemap | Smooth polylines/heatmap for the 35% |
+| Backend | Django 4 + DRF | Required Django |
+| Geocode + 3 routes | **Mapbox** Directions `alternatives=true` (+ Geocoding) | Reliable US routes; up to 3 geometries |
+| Weather | **Open-Meteo** Forecast API (hourly) | Free, no key, wind + precip + snowfall, 48h+ |
+| DB | SQLite locally; Postgres only if hosting needs it | Keep simple |
+| Host | Frontend Vercel + Backend Render (or Railway) | Deliverable: hosted app |
+| Repo | Fresh GitHub repo from this folder | Deliverable |
+
+All weather/risk/recommendation math lives in **pure Python** on the backend (unit-tested). Frontend only renders.
+
+## Architecture
+
+```
+UI (React Form + Map)
+  --POST /api/analyze/--> Django DRF
+                            --> Mapbox Geocode
+                            --> Mapbox Directions (up to 3)
+                            --> Open-Meteo Hourly
+                            --> risk_engine + recommend
+  <-- JSON routes, checkpoints, heatmap --
+```
+
+**Single primary endpoint:** `POST /api/analyze/`
+
+Request: `{ origin, destination, departure_at, load_weight_lb, sample_interval_miles: 10|25|50 }`
+
+Response: `{ routes: [...], recommended_route_id, heatmap: {...} }`
+
+## Step-by-step build order
+
+### Phase 0 — Repo skeleton
+1. Monorepo: `backend/`, `frontend/`, root `README.md`, `.gitignore`, `plan`
+2. Django + routing app; DRF; CORS; `MAPBOX_TOKEN`
+3. Vite React TS + MapLibre; API URL env
+4. Stub `POST /api/analyze/`
+
+### Phase 1 — Core logic (40%)
+`mapbox.py`, `sampling.py`, `weather.py`, `risk.py`, `metrics.py`, `recommend.py`, `planner.py` + pytest
+
+### Phase 2 — API contract freeze
+Lock Route / Checkpoint / Heatmap JSON shapes
+
+### Phase 3 — UI / map / heatmap (35%)
+Form, map (3 routes + risk markers), route panel, 48h heatmap slider
+
+### Phase 4 — Deliverables
+README, deploy, GitHub hygiene, Loom script
+
+## Definition of done
+
+- [ ] User can submit origin, destination, departure, load weight, interval
+- [ ] Up to 3 real routes on the map with checkpoints, ETAs, risk colors
+- [ ] Risk + load rules match the decoded table; recommendation follows the 4 preferences
+- [ ] Weather heatmap + 48h slider works along the corridor
+- [ ] GitHub + hosted URL + Loom ready
+- [ ] README explains setup and scoring logic clearly

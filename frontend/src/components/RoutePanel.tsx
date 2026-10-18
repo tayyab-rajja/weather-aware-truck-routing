@@ -1,0 +1,72 @@
+import type { AnalyzeResponse, RouteResult } from "../types";
+import { RISK_LABELS } from "../lib/riskColors";
+
+interface Props {
+  data: AnalyzeResponse;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}
+
+function fmtDuration(min: number): string {
+  const h = Math.floor(min / 60);
+  const m = Math.round(min % 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+export function RoutePanel({ data, selectedId, onSelect }: Props) {
+  return (
+    <div className="route-panel">
+      <h2>Routes</h2>
+      <ul>
+        {data.routes.map((r) => (
+          <RouteCard
+            key={r.id}
+            route={r}
+            active={r.id === selectedId}
+            onSelect={() => onSelect(r.id)}
+          />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function RouteCard({
+  route,
+  active,
+  onSelect,
+}: {
+  route: RouteResult;
+  active: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <li>
+      <button
+        type="button"
+        className={`route-card ${active ? "active" : ""} ${route.is_recommended ? "recommended" : ""}`}
+        onClick={onSelect}
+      >
+        <div className="route-card-head">
+          <strong>{route.summary || route.id}</strong>
+          {route.is_recommended && <span className="badge">Recommended</span>}
+        </div>
+        <div className="route-stats">
+          <span>{route.distance_miles.toFixed(0)} mi</span>
+          <span>{fmtDuration(route.duration_minutes)}</span>
+          <span>Severe {route.metrics.severe_miles.toFixed(0)} mi</span>
+          <span>High {route.metrics.high_miles.toFixed(0)} mi</span>
+          <span>Avg risk {route.metrics.avg_risk.toFixed(2)}</span>
+        </div>
+        {route.is_recommended && route.recommendation_reason && (
+          <p className="why">{route.recommendation_reason}</p>
+        )}
+        {route.checkpoints[0] && (
+          <p className="hint">
+            First checkpoint risk: {RISK_LABELS[route.checkpoints[0].risk]}
+          </p>
+        )}
+      </button>
+    </li>
+  );
+}
