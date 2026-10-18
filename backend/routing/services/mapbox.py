@@ -1,4 +1,10 @@
-"""Mapbox Geocoding + Directions (with alternatives)."""
+"""
+Geocoding + Directions.
+
+Prefers Mapbox when MAPBOX_TOKEN is set. Falls back to Nominatim + OSRM
+(public endpoints) so the demo works without a paid key. OSRM/Mapbox both
+support alternatives — we never invent extra routes.
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -10,7 +16,7 @@ from django.conf import settings
 
 
 class MapboxError(Exception):
-    """Raised when Mapbox geocoding or routing fails."""
+    """Raised when geocoding or routing fails."""
 
 
 @dataclass(frozen=True)
@@ -30,13 +36,40 @@ class RawRoute:
 
 
 def _token() -> str:
-    token = getattr(settings, "MAPBOX_TOKEN", "") or ""
-    if not token:
-        raise MapboxError("MAPBOX_TOKEN is not configured")
+    token = (getattr(settings, "MAPBOX_TOKEN", "") or "").strip()
+    if not token or token.startswith("PLACEHOLDER"):
+        return ""
     return token
 
 
+def _use_mapbox() -> bool:
+    return bool(_token())
+
+
 def geocode(query: str) -> Place:
+    if _use_mapbox():
+        return _geocode_mapbox(query)
+    return _geocode_nominatim(query)
+
+
+def directions(origin: Place, destination: Place) -> list[RawRoute]:
+    """Return up to 3 driving routes. Does not invent extras if API returns fewer."""
+    if _use_mapbox():
+        return _directions_mapbox(origin, destination)
+    return _directions_osrm(origin, destination)
+
+
+def suggest_places(query: str, limit: int = 5) -> list[dict[str, Any]]:
+    if not query or len(query.strip()) < 2:
+        return []
+    if _use_mapbox():
+        return _suggest_mapbox(query, limit)
+    return _suggest_nominatim(query, limit)
+
+
+# --- Mapbox -----------------------------------------------------------------
+
+def _geocode_mapbox(query: str) -> Place:
     token = _token()
     url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{quote(query)}.json"
     resp = requests.get(
@@ -46,8 +79,7 @@ def geocode(query: str) -> Place:
     )
     if resp.status_code != 200:
         raise MapboxError(f"Geocoding failed ({resp.status_code})")
-    data = resp.json()
-    features = data.get("features") or []
+    features = resp.json().get("features") or []
     if not features:
         raise MapboxError(f"Could not geocode: {query!r}")
     feat = features[0]
@@ -55,8 +87,7 @@ def geocode(query: str) -> Place:
     return Place(label=feat.get("place_name") or query, lng=float(lng), lat=float(lat))
 
 
-def directions(origin: Place, destination: Place) -> list[RawRoute]:
-    """Return up to 3 driving routes. Does not invent extras if API returns fewer."""
+def _directions_mapbox(origin: Place, destination: Place) -> list[RawRoute]:
     token = _token()
     coords = f"{origin.lng},{origin.lat};{destination.lng},{destination.lat}"
     url = f"https://api.mapbox.com/directions/v5/mapbox/driving/{coords}"
@@ -73,27 +104,24 @@ def directions(origin: Place, destination: Place) -> list[RawRoute]:
     )
     if resp.status_code != 200:
         raise MapboxError(f"Directions failed ({resp.status_code}): {resp.text[:200]}")
-    data = resp.json()
-    routes_raw = data.get("routes") or []
+    routes_raw = resp.json().get("routes") or []
     if not routes_raw:
         raise MapboxError("No routes found between origin and destination")
+    return [_normalize_mapbox_route(r, i) for i, r in enumerate(routes_raw[:3])]
 
-    out: list[RawRoute] = []
-    for i, r in enumerate(routes_raw[:3]):
-        geom = r.get("geometry") or {}
-        coords_list = geom.get("coordinates") or []
-        meters = float(r.get("distance") or 0)
-        seconds = float(r.get("duration") or 0)
-        out.append(
-            RawRoute(
-                id=f"route_{i + 1}",
-                distance_miles=meters / 1609.344,
-                duration_minutes=seconds / 60.0,
-                geometry=[[float(c[0]), float(c[1])] for c in coords_list],
-                summary=_route_summary(r, i),
-            )
-        )
-    return out
+
+def _normalize_mapbox_route(route: dict[str, Any], index: int) -> RawRoute:
+    geom = route.get("geometry") or {}
+    coords_list = geom.get("coordinates") or []
+    meters = float(route.get("distance") or 0)
+    seconds = float(route.get("duration") or 0)
+    return RawRoute(
+        id=f"route_{index + 1}",
+        distance_miles=meters / 1609.344,
+        duration_minutes=seconds / 60.0,
+        geometry=[[float(c[0]), float(c[1])] for c in coords_list],
+        summary=_route_summary(route, index),
+    )
 
 
 def _route_summary(route: dict[str, Any], index: int) -> str:
@@ -104,10 +132,7 @@ def _route_summary(route: dict[str, Any], index: int) -> str:
     return labels[index] if index < len(labels) else f"Route {index + 1}"
 
 
-def suggest_places(query: str, limit: int = 5) -> list[dict[str, Any]]:
-    """Lightweight autocomplete for the frontend."""
-    if not query or len(query.strip()) < 2:
-        return []
+def _suggest_mapbox(query: str, limit: int) -> list[dict[str, Any]]:
     token = _token()
     url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{quote(query.strip())}.json"
     resp = requests.get(
@@ -131,3 +156,87 @@ def suggest_places(query: str, limit: int = 5) -> list[dict[str, Any]]:
         }
         for f in features
     ]
+
+
+# --- Nominatim + OSRM fallback ----------------------------------------------
+
+_USER_AGENT = "WeatherAwareTruckRouting/1.0 (assessment; contact: local-dev)"
+
+
+def _geocode_nominatim(query: str) -> Place:
+    resp = requests.get(
+        "https://nominatim.openstreetmap.org/search",
+        params={"q": query, "format": "json", "limit": 1},
+        headers={"User-Agent": _USER_AGENT},
+        timeout=20,
+    )
+    if resp.status_code != 200:
+        raise MapboxError(f"Geocoding failed ({resp.status_code})")
+    results = resp.json() or []
+    if not results:
+        raise MapboxError(f"Could not geocode: {query!r}")
+    hit = results[0]
+    return Place(
+        label=hit.get("display_name") or query,
+        lng=float(hit["lon"]),
+        lat=float(hit["lat"]),
+    )
+
+
+def _suggest_nominatim(query: str, limit: int) -> list[dict[str, Any]]:
+    resp = requests.get(
+        "https://nominatim.openstreetmap.org/search",
+        params={"q": query.strip(), "format": "json", "limit": limit},
+        headers={"User-Agent": _USER_AGENT},
+        timeout=15,
+    )
+    if resp.status_code != 200:
+        return []
+    return [
+        {
+            "label": h.get("display_name") or "",
+            "lng": float(h["lon"]),
+            "lat": float(h["lat"]),
+        }
+        for h in (resp.json() or [])
+    ]
+
+
+def _directions_osrm(origin: Place, destination: Place) -> list[RawRoute]:
+    coords = f"{origin.lng},{origin.lat};{destination.lng},{destination.lat}"
+    url = f"https://router.project-osrm.org/route/v1/driving/{coords}"
+    resp = requests.get(
+        url,
+        params={
+            "alternatives": "true",
+            "overview": "full",
+            "geometries": "geojson",
+            "steps": "false",
+        },
+        timeout=30,
+    )
+    if resp.status_code != 200:
+        raise MapboxError(f"Directions failed ({resp.status_code}): {resp.text[:200]}")
+    data = resp.json()
+    if data.get("code") != "Ok":
+        raise MapboxError(f"Directions failed: {data.get('message') or data.get('code')}")
+    routes_raw = data.get("routes") or []
+    if not routes_raw:
+        raise MapboxError("No routes found between origin and destination")
+
+    out: list[RawRoute] = []
+    for i, r in enumerate(routes_raw[:3]):
+        geom = r.get("geometry") or {}
+        coords_list = geom.get("coordinates") or []
+        meters = float(r.get("distance") or 0)
+        seconds = float(r.get("duration") or 0)
+        out.append(
+            RawRoute(
+                id=f"route_{i + 1}",
+                distance_miles=meters / 1609.344,
+                duration_minutes=seconds / 60.0,
+                geometry=[[float(c[0]), float(c[1])] for c in coords_list],
+                summary=_route_summary(r, i),
+            )
+        )
+    return out

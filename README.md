@@ -2,8 +2,11 @@
 
 React + Django app that helps a truck driver choose the **safest route** based on **weather**, **load weight**, and **travel time**.
 
-> **Live app:** _add Vercel URL after deploy_  
-> **API:** _add Render URL after deploy_
+> **GitHub:** https://github.com/SheharyarAhmad1991/weather-aware-truck-routing  
+> **Live app:** https://frontend-kappa-nine-95.vercel.app  
+> **API:** https://backend-flame-ten-24.vercel.app  
+>
+> Optional: set backend `MAPBOX_TOKEN` for Mapbox geocoding/routing (preferred). Without it, the API falls back to Nominatim + OSRM. Weather uses Open-Meteo (no key).
 
 ## What it does
 
@@ -20,8 +23,9 @@ React + Django app that helps a truck driver choose the **safest route** based o
 | --- | --- |
 | Frontend | Vite, React, TypeScript, MapLibre GL |
 | Backend | Django 4, DRF |
-| Routing / geocode | Mapbox |
+| Routing / geocode | Mapbox (preferred) or Nominatim + OSRM fallback |
 | Weather | Open-Meteo (no API key) |
+| Host | Vercel (frontend + Django API) |
 
 ## Quick start
 
@@ -108,9 +112,13 @@ Segment miles between checkpoints are attributed to the **arrival** checkpointâ€
 
 ## Deploy
 
-**Backend (Render):** connect this repo, root `backend`, use `render.yaml` / `Procfile`. Set `MAPBOX_TOKEN`, `CORS_ALLOWED_ORIGINS` (your Vercel URL), `ALLOWED_HOSTS`.
+Already hosted on Vercel (see URLs at top). To redeploy:
 
-**Frontend (Vercel):** root `frontend`, set `VITE_API_URL` to the Render API origin (no trailing path). Redeploy after changing env vars.
+**Backend:** from `backend/`, `npx vercel --prod`. Set env: `SECRET_KEY`, `ALLOWED_HOSTS=.vercel.app`, `CORS_ALLOWED_ORIGINS=<frontend URL>`, optional `MAPBOX_TOKEN`.
+
+**Frontend:** from `frontend/`, `npx vercel --prod`. Set `VITE_API_URL` to the backend origin.
+
+`backend/render.yaml` + `Procfile` are also included if you prefer Render for the API.
 
 ## Loom
 
