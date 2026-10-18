@@ -18,15 +18,17 @@ type BasemapMode = "streets" | "satellite";
 /** Distinct, readable route colors (blue / burnt orange / violet) */
 export const ROUTE_PALETTE = ["#1d4ed8", "#c2410c", "#6d28d9"] as const;
 
-/** Free street + satellite rasters; toggle via layer visibility (no overlay wipe). */
+/** Free Esri street + satellite rasters (no API key); toggle via layer visibility. */
 const FREE_STYLE: mapboxgl.Style = {
   version: 8,
   sources: {
     streets: {
       type: "raster",
-      tiles: ["https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"],
+      tiles: [
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
+      ],
       tileSize: 256,
-      attribution: "© CARTO © OpenStreetMap",
+      attribution: "© Esri",
     },
     satellite: {
       type: "raster",
