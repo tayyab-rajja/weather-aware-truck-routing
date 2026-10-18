@@ -1,5 +1,5 @@
 /**
- * Satellite map + multi-color routes + truck path scrubber.
+ * Street map (default) + optional satellite, multi-color routes, truck scrubber.
  * Patterns from RoadWatch-ELD (mapbox-gl, GSAP draw-on, ResizeObserver/nudge).
  */
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -13,13 +13,21 @@ import "./RouteMap.css";
 
 const TOKEN = (import.meta.env.VITE_MAPBOX_TOKEN as string | undefined)?.trim() || "";
 
-/** Distinct colors for route 1 / 2 / 3 — always different */
-export const ROUTE_PALETTE = ["#ff8c00", "#00e5ff", "#c084fc"] as const;
+type BasemapMode = "streets" | "satellite";
 
-/** Free Esri satellite + place labels (no API key) */
-const SATELLITE_STYLE: mapboxgl.Style = {
+/** Distinct, readable route colors (blue / burnt orange / violet) */
+export const ROUTE_PALETTE = ["#1d4ed8", "#c2410c", "#6d28d9"] as const;
+
+/** Free street + satellite rasters; toggle via layer visibility (no overlay wipe). */
+const FREE_STYLE: mapboxgl.Style = {
   version: 8,
   sources: {
+    streets: {
+      type: "raster",
+      tiles: ["https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"],
+      tileSize: 256,
+      attribution: "© CARTO © OpenStreetMap",
+    },
     satellite: {
       type: "raster",
       tiles: [
@@ -37,10 +45,30 @@ const SATELLITE_STYLE: mapboxgl.Style = {
     },
   },
   layers: [
-    { id: "satellite", type: "raster", source: "satellite" },
-    { id: "labels", type: "raster", source: "labels", paint: { "raster-opacity": 0.85 } },
+    { id: "basemap-streets", type: "raster", source: "streets" },
+    {
+      id: "basemap-satellite",
+      type: "raster",
+      source: "satellite",
+      layout: { visibility: "none" },
+    },
+    {
+      id: "basemap-labels",
+      type: "raster",
+      source: "labels",
+      layout: { visibility: "none" },
+      paint: { "raster-opacity": 0.85 },
+    },
   ],
 };
+
+function applyFreeBasemap(map: mapboxgl.Map, mode: BasemapMode) {
+  const streets = mode === "streets";
+  if (!map.getLayer("basemap-streets")) return;
+  map.setLayoutProperty("basemap-streets", "visibility", streets ? "visible" : "none");
+  map.setLayoutProperty("basemap-satellite", "visibility", streets ? "none" : "visible");
+  map.setLayoutProperty("basemap-labels", "visibility", streets ? "none" : "visible");
+}
 
 interface Props {
   data: AnalyzeResponse | null;
@@ -56,9 +84,18 @@ export function RouteMap({ data, selectedId, forecastHour }: Props) {
   const truckRef = useRef<mapboxgl.Marker | null>(null);
   const tweensRef = useRef<gsap.core.Tween[]>([]);
   const drawnTripRef = useRef("");
+  const dataRef = useRef(data);
+  const selectedIdRef = useRef(selectedId);
+  const forecastHourRef = useRef(forecastHour);
+  const appliedBasemapRef = useRef<BasemapMode | null>(null);
   const [phase, setPhase] = useState<"loading" | "ready" | "error">("loading");
   const [errorMsg, setErrorMsg] = useState("");
   const [progress, setProgress] = useState(0); // 0..1 along selected route
+  const [basemap, setBasemap] = useState<BasemapMode>("streets");
+
+  dataRef.current = data;
+  selectedIdRef.current = selectedId;
+  forecastHourRef.current = forecastHour;
 
   const selectedRoute = useMemo(() => {
     if (!data?.routes.length) return null;
@@ -79,7 +116,7 @@ export function RouteMap({ data, selectedId, forecastHour }: Props) {
     return nearestCheckpoint(selectedRoute.checkpoints, progress);
   }, [selectedRoute, routeIndex, progress]);
 
-  // Create satellite map once
+  // Create map once (streets by default)
   useEffect(() => {
     if (!containerRef.current) return;
     mapboxgl.accessToken = TOKEN || "pk.local-free-basemap";
@@ -88,7 +125,7 @@ export function RouteMap({ data, selectedId, forecastHour }: Props) {
     try {
       map = new mapboxgl.Map({
         container: containerRef.current,
-        style: TOKEN ? "mapbox://styles/mapbox/satellite-streets-v12" : SATELLITE_STYLE,
+        style: TOKEN ? "mapbox://styles/mapbox/streets-v12" : FREE_STYLE,
         center: [-98, 39],
         zoom: 3.5,
         attributionControl: false,
@@ -106,6 +143,7 @@ export function RouteMap({ data, selectedId, forecastHour }: Props) {
       readyRef.current = true;
       setPhase("ready");
       drawnTripRef.current = "";
+      if (!TOKEN) applyFreeBasemap(map, "streets");
       nudge(map);
     });
 
@@ -129,6 +167,60 @@ export function RouteMap({ data, selectedId, forecastHour }: Props) {
       mapRef.current = null;
     };
   }, []);
+
+  // Basemap toggle — free tiles flip visibility; Mapbox token swaps styles
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || phase !== "ready") return;
+    if (appliedBasemapRef.current === basemap) {
+      if (!TOKEN) applyFreeBasemap(map, basemap);
+      return;
+    }
+
+    if (!TOKEN) {
+      applyFreeBasemap(map, basemap);
+      appliedBasemapRef.current = basemap;
+      return;
+    }
+
+    // Mapbox starts on streets — mark applied, skip redundant setStyle
+    if (appliedBasemapRef.current === null && basemap === "streets") {
+      appliedBasemapRef.current = "streets";
+      return;
+    }
+
+    const styleUrl =
+      basemap === "streets"
+        ? "mapbox://styles/mapbox/streets-v12"
+        : "mapbox://styles/mapbox/satellite-streets-v12";
+
+    const nextMode = basemap;
+    readyRef.current = false;
+    setPhase("loading");
+    map.setStyle(styleUrl);
+    map.once("style.load", () => {
+      appliedBasemapRef.current = nextMode;
+      readyRef.current = true;
+      setPhase("ready");
+      drawnTripRef.current = "";
+      truckRef.current?.remove();
+      truckRef.current = null;
+      markersRef.current.forEach((m) => m.remove());
+      markersRef.current = [];
+
+      const current = dataRef.current;
+      if (current?.routes.length) {
+        ensureExtraLayers(map);
+        updateHeatmap(map, current, forecastHourRef.current);
+        killTweens(tweensRef.current);
+        clearRouteLayers(map);
+        tweensRef.current = drawRoutesAnimated(map, current.routes, selectedIdRef.current);
+        markersRef.current = addCheckpointMarkers(map, current, selectedIdRef.current);
+        fitToRoutes(map, current.routes);
+      }
+      nudge(map);
+    });
+  }, [basemap, phase]);
 
   // Reset scrubber when selection / trip changes
   useEffect(() => {
@@ -221,10 +313,27 @@ export function RouteMap({ data, selectedId, forecastHour }: Props) {
     <div className="route-map">
       <div ref={containerRef} className="route-map__canvas" />
 
+      <div className="basemap-toggle" role="group" aria-label="Map style">
+        <button
+          type="button"
+          className={basemap === "streets" ? "active" : ""}
+          onClick={() => setBasemap("streets")}
+        >
+          Streets
+        </button>
+        <button
+          type="button"
+          className={basemap === "satellite" ? "active" : ""}
+          onClick={() => setBasemap("satellite")}
+        >
+          Satellite
+        </button>
+      </div>
+
       {phase === "loading" && (
         <div className="route-map__overlay">
           <span className="route-map__spinner" />
-          Loading satellite map…
+          Loading map…
         </div>
       )}
       {phase === "error" && (
@@ -368,10 +477,11 @@ function ensureExtraLayers(map: mapboxgl.Map) {
       source: "traveled",
       layout: { "line-cap": "round", "line-join": "round" },
       paint: {
-        "line-color": "#ffffff",
-        "line-width": 8,
+        // Amber reads on both light streets and satellite
+        "line-color": "#f59e0b",
+        "line-width": 7,
         "line-opacity": 0.95,
-        "line-blur": 0.2,
+        "line-blur": 0.15,
       },
     });
   }

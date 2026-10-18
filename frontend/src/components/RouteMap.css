@@ -39,11 +39,49 @@
   padding: 1.5rem;
 }
 
+.basemap-toggle {
+  position: absolute;
+  top: 0.85rem;
+  right: 3.25rem;
+  z-index: 5;
+  display: inline-flex;
+  padding: 3px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
+}
+
+.basemap-toggle button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #475569;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.4rem 0.7rem;
+  border-radius: 7px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.basemap-toggle button:hover {
+  color: #0f172a;
+  background: rgba(15, 23, 42, 0.05);
+}
+
+.basemap-toggle button.active {
+  color: #fff;
+  background: #1d4ed8;
+}
+
 .route-map__spinner {
   width: 22px;
   height: 22px;
   border: 2px solid #334155;
-  border-top-color: #ff8c00;
+  border-top-color: #1d4ed8;
   border-radius: 50%;
   animation: rm-spin 0.7s linear infinite;
 }
@@ -132,7 +170,7 @@
 
 .truck-scrubber input[type="range"] {
   width: 100%;
-  accent-color: #ff8c00;
+  accent-color: #1d4ed8;
 }
 
 .truck-scrubber__ends {
@@ -176,11 +214,12 @@
   flex-wrap: wrap;
   gap: 0.55rem 0.85rem;
   padding: 0.55rem 0.75rem;
-  background: rgba(10, 14, 20, 0.82);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(15, 23, 42, 0.12);
   border-radius: 10px;
-  color: #e8eef5;
+  color: #0f172a;
   font-size: 0.75rem;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.1);
 }
 
 .route-color-legend span {
