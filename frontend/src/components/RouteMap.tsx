@@ -17,22 +17,23 @@ import "./RouteMap.css";
 const ROUTE_COLORS = ["#0f766e", "#2563eb", "#7c3aed"];
 const RECOMMENDED = "#ea580c";
 
-/** Free raster tiles — reliable, no token, cities/roads visible */
+/**
+ * Free raster basemap — no API key.
+ * Esri World Street Map public tiles (roads + cities). Note z/y/x order.
+ */
 const BASEMAP_STYLE: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
-    carto: {
+    streets: {
       type: "raster",
       tiles: [
-        "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
-        "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
-        "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
       ],
       tileSize: 256,
-      attribution: "© CARTO © OpenStreetMap",
+      attribution: "© Esri",
     },
   },
-  layers: [{ id: "carto", type: "raster", source: "carto" }],
+  layers: [{ id: "streets", type: "raster", source: "streets" }],
 };
 
 interface Props {
