@@ -262,6 +262,30 @@ body {
   inset: 0;
 }
 
+.map-root .maplibregl-canvas {
+  outline: none;
+}
+
+.route-popup .maplibregl-popup-content {
+  border-radius: 12px;
+  padding: 0.75rem 0.9rem;
+  box-shadow: var(--shadow);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.popup-card strong {
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.popup-card em {
+  display: block;
+  margin-top: 0.35rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
 .map-empty {
   position: absolute;
   left: 50%;
