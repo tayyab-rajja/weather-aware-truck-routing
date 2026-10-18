@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import type { AnalyzeRequest } from "../types";
+import { DeparturePicker } from "./DeparturePicker";
 import { LocationInput } from "./LocationInput";
 
 interface Props {
@@ -63,16 +64,7 @@ export function TripForm({ loading, onSubmit }: Props) {
         }}
       />
 
-      <label className="field" htmlFor="departure">
-        <span>Departure</span>
-        <input
-          id="departure"
-          type="datetime-local"
-          value={departure}
-          onChange={(e) => setDeparture(e.target.value)}
-          required
-        />
-      </label>
+      <DeparturePicker value={departure} onChange={setDeparture} />
 
       <label className="field" htmlFor="weight">
         <span>Load weight (lb)</span>
