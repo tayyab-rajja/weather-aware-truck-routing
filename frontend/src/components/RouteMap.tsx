@@ -331,7 +331,7 @@ export function RouteMap({ data, selectedId, forecastHour }: Props) {
       </div>
 
       {phase === "loading" && (
-        <div className="route-map__overlay">
+        <div className="route-map__overlay" aria-busy="true">
           <span className="route-map__spinner" />
           Loading map…
         </div>
