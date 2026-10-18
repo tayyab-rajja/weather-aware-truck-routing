@@ -141,6 +141,18 @@
   font-size: 11.5px;
 }
 
+.map-popup__reasons {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+  color: #0f172a;
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+.map-popup__reasons li {
+  margin: 0.15rem 0;
+}
+
 .mapboxgl-popup-content {
   border-radius: 10px;
   padding: 10px 12px;

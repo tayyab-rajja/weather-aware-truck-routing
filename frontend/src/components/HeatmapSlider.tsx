@@ -24,8 +24,8 @@ export function HeatmapSlider({ hour, maxHours, label, summary, onChange }: Prop
         </span>
       </div>
       <p className="heatmap-slider__hint">
-        Scrub to preview how weather risk along the corridor changes over the next 2 days (map glow
-        + dots update).
+        Scrub to preview corridor weather risk over the next 2 days — map glow and dots update with
+        each hour.
       </p>
       <input
         type="range"
@@ -47,11 +47,11 @@ export function HeatmapSlider({ hour, maxHours, label, summary, onChange }: Prop
           />
           <div>
             <strong>
-              Corridor at +{hour}h: {RISK_LABELS[summary.dominantRisk]}
+              Corridor risk at +{hour}h: {RISK_LABELS[summary.dominantRisk]}
             </strong>
             <div>
-              Avg risk score {summary.avgScore.toFixed(2)} · sample wind{" "}
-              {summary.sampleWind.toFixed(0)} mph
+              Avg score {summary.avgScore.toFixed(2)} · sample wind {summary.sampleWind.toFixed(0)}{" "}
+              mph
             </div>
           </div>
         </div>

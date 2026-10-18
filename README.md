@@ -21,13 +21,15 @@ React + Django app that helps a truck driver choose the **safest route** based o
 
 | Layer | Tech | Cost |
 | --- | --- | --- |
-| Frontend | Vite, React, TypeScript, MapLibre GL | Free |
-| Basemap | OpenFreeMap | Free, no token |
+| Frontend | Vite, React, TypeScript, Mapbox GL JS | Free |
+| Basemap | Esri World Street Map + World Imagery (no token) | Free |
 | Backend | Django 4 + DRF | Free |
 | Geocode | Nominatim | Free, no key |
 | Routing | OSRM public API | Free, no key |
 | Weather | Open-Meteo | Free, no key |
 | Host | Vercel Hobby | Free tier |
+
+Optional: set `VITE_MAPBOX_TOKEN` for Mapbox vector styles; otherwise the free Esri rasters are used.
 
 ## Quick start
 
@@ -70,7 +72,7 @@ App: `http://localhost:5173`
   "origin": "Chicago, IL",
   "destination": "Detroit, MI",
   "departure_at": "2026-10-18T14:00:00Z",
-  "load_weight_lb": 35000,
+  "load_weight_lb": 42000,
   "sample_interval_miles": 25
 }
 ```

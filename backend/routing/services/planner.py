@@ -31,9 +31,9 @@ class AnalyzeInput:
 
 
 HEATMAP_HOURS = 48
-# Fewer heatmap cells = faster; still enough for the 48h slider
-HEATMAP_POINT_INTERVAL_MILES = 80
-HEATMAP_MAX_POINTS = 8
+# Dense enough for a clear corridor glow; capped so analyze stays fast
+HEATMAP_POINT_INTERVAL_MILES = 40
+HEATMAP_MAX_POINTS = 14
 
 
 def analyze(data: AnalyzeInput) -> dict[str, Any]:

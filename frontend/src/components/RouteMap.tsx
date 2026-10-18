@@ -118,7 +118,7 @@ export function RouteMap({ data, selectedId, forecastHour }: Props) {
     return nearestCheckpoint(selectedRoute.checkpoints, progress);
   }, [selectedRoute, routeIndex, progress]);
 
-  // Create map once (streets by default)
+  // Always use free Esri rasters (reliable, no key). Optional Mapbox token is unused for basemap.
   useEffect(() => {
     if (!containerRef.current) return;
     mapboxgl.accessToken = TOKEN || "pk.local-free-basemap";
@@ -127,7 +127,7 @@ export function RouteMap({ data, selectedId, forecastHour }: Props) {
     try {
       map = new mapboxgl.Map({
         container: containerRef.current,
-        style: TOKEN ? "mapbox://styles/mapbox/streets-v12" : FREE_STYLE,
+        style: FREE_STYLE,
         center: [-98, 39],
         zoom: 3.5,
         attributionControl: false,
@@ -141,21 +141,26 @@ export function RouteMap({ data, selectedId, forecastHour }: Props) {
     mapRef.current = map;
     map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
 
-    map.on("load", () => {
+    const markReady = () => {
+      if (readyRef.current) return;
       readyRef.current = true;
       setPhase("ready");
       drawnTripRef.current = "";
-      if (!TOKEN) applyFreeBasemap(map, "streets");
+      applyFreeBasemap(map, basemap);
+      appliedBasemapRef.current = basemap;
       nudge(map);
+    };
+
+    map.on("load", markReady);
+    map.on("error", () => {
+      // Style/tile errors should not leave a permanent spinner
+      markReady();
     });
 
     const observer = new ResizeObserver(() => map.resize());
     observer.observe(containerRef.current);
-    const safety = window.setTimeout(() => {
-      readyRef.current = true;
-      setPhase((p) => (p === "loading" ? "ready" : p));
-      map.resize();
-    }, 2500);
+    // Fail-open quickly so UI never sticks on "Loading map…"
+    const safety = window.setTimeout(markReady, 1200);
 
     return () => {
       window.clearTimeout(safety);
@@ -168,60 +173,15 @@ export function RouteMap({ data, selectedId, forecastHour }: Props) {
       map.remove();
       mapRef.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Basemap toggle — free tiles flip visibility; Mapbox token swaps styles
+  // Streets ↔ Satellite via layer visibility (no style reload)
   useEffect(() => {
     const map = mapRef.current;
     if (!map || phase !== "ready") return;
-    if (appliedBasemapRef.current === basemap) {
-      if (!TOKEN) applyFreeBasemap(map, basemap);
-      return;
-    }
-
-    if (!TOKEN) {
-      applyFreeBasemap(map, basemap);
-      appliedBasemapRef.current = basemap;
-      return;
-    }
-
-    // Mapbox starts on streets — mark applied, skip redundant setStyle
-    if (appliedBasemapRef.current === null && basemap === "streets") {
-      appliedBasemapRef.current = "streets";
-      return;
-    }
-
-    const styleUrl =
-      basemap === "streets"
-        ? "mapbox://styles/mapbox/streets-v12"
-        : "mapbox://styles/mapbox/satellite-streets-v12";
-
-    const nextMode = basemap;
-    readyRef.current = false;
-    setPhase("loading");
-    map.setStyle(styleUrl);
-    map.once("style.load", () => {
-      appliedBasemapRef.current = nextMode;
-      readyRef.current = true;
-      setPhase("ready");
-      drawnTripRef.current = "";
-      truckRef.current?.remove();
-      truckRef.current = null;
-      markersRef.current.forEach((m) => m.remove());
-      markersRef.current = [];
-
-      const current = dataRef.current;
-      if (current?.routes.length) {
-        ensureExtraLayers(map);
-        updateHeatmap(map, current, forecastHourRef.current);
-        killTweens(tweensRef.current);
-        clearRouteLayers(map);
-        tweensRef.current = drawRoutesAnimated(map, current.routes, selectedIdRef.current);
-        markersRef.current = addCheckpointMarkers(map, current, selectedIdRef.current);
-        fitToRoutes(map, current.routes);
-      }
-      nudge(map);
-    });
+    applyFreeBasemap(map, basemap);
+    appliedBasemapRef.current = basemap;
   }, [basemap, phase]);
 
   // Reset scrubber when selection / trip changes
@@ -416,36 +376,36 @@ function ensureExtraLayers(map: mapboxgl.Map) {
       source: "heatmap",
       maxzoom: 14,
       paint: {
-        "heatmap-weight": ["interpolate", ["linear"], ["get", "score"], 1, 0.35, 5, 1],
-        "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 4, 1.2, 8, 1.8],
-        "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 4, 28, 8, 48],
-        "heatmap-opacity": 0.72,
+        "heatmap-weight": ["interpolate", ["linear"], ["get", "score"], 1, 0.45, 5, 1],
+        "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 4, 1.6, 8, 2.4],
+        "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 4, 36, 8, 64],
+        "heatmap-opacity": 0.85,
         "heatmap-color": [
           "interpolate",
           ["linear"],
           ["heatmap-density"],
           0,
-          "rgba(0,229,255,0)",
-          0.2,
-          "rgba(42,157,143,0.55)",
-          0.4,
-          "rgba(255,200,0,0.65)",
-          0.65,
-          "rgba(255,140,0,0.8)",
-          0.85,
-          "rgba(231,111,81,0.9)",
+          "rgba(42,157,143,0)",
+          0.15,
+          "rgba(42,157,143,0.65)",
+          0.35,
+          "rgba(233,196,106,0.75)",
+          0.55,
+          "rgba(244,162,97,0.85)",
+          0.75,
+          "rgba(231,111,81,0.92)",
           1,
-          "rgba(155,34,38,0.95)",
+          "rgba(155,34,38,0.98)",
         ],
       },
     });
-    // Clear colored dots so forecast hour changes are obvious on satellite
+    // Colored dots make hour-to-hour risk changes obvious
     map.addLayer({
       id: "forecast-dots",
       type: "circle",
       source: "heatmap",
       paint: {
-        "circle-radius": ["interpolate", ["linear"], ["get", "score"], 1, 6, 5, 11],
+        "circle-radius": ["interpolate", ["linear"], ["get", "score"], 1, 8, 5, 14],
         "circle-color": [
           "match",
           ["get", "risk"],
@@ -461,8 +421,8 @@ function ensureExtraLayers(map: mapboxgl.Map) {
           "#9b2226",
           "#2a9d8f",
         ],
-        "circle-opacity": 0.9,
-        "circle-stroke-width": 2,
+        "circle-opacity": 0.95,
+        "circle-stroke-width": 2.5,
         "circle-stroke-color": "#ffffff",
       },
     });
@@ -603,11 +563,17 @@ function addCheckpointMarkers(
       const el = document.createElement("div");
       el.className = focused ? "map-cp" : "map-cp map-cp--dim";
       el.style.setProperty("--cp-color", RISK_COLORS[cp.risk as RiskLevel]);
-      const popup = new mapboxgl.Popup({ offset: 16, closeButton: false }).setHTML(
+      const etaLabel = formatEta(cp.eta);
+      const reasons = (cp.risk_reasons || [])
+        .map((r) => `<li>${escapeHtml(r)}</li>`)
+        .join("");
+      const popup = new mapboxgl.Popup({ offset: 16, closeButton: false, maxWidth: "280px" }).setHTML(
         `<div class="map-popup">
           <strong>${escapeHtml(route.summary)} · mi ${cp.mile.toFixed(0)}</strong>
           <span>Risk: ${RISK_LABELS[cp.risk]}</span>
+          <span class="map-popup__meta">ETA ${escapeHtml(etaLabel)}</span>
           <span class="map-popup__meta">Wind ${cp.weather.wind_mph} mph · Rain ${cp.weather.rain_in_hr} · Snow ${cp.weather.snow_in_hr}</span>
+          ${reasons ? `<ul class="map-popup__reasons">${reasons}</ul>` : ""}
         </div>`,
       );
       markers.push(
@@ -702,4 +668,16 @@ function killTweens(tweens: gsap.core.Tween[]) {
 
 function escapeHtml(value: string): string {
   return value.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+}
+
+function formatEta(iso: string): string {
+  const d = new Date(iso.endsWith("Z") || iso.includes("+") ? iso : `${iso}Z`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
