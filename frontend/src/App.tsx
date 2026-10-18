@@ -42,6 +42,29 @@ export default function App() {
     });
   }, [data, forecastHour]);
 
+  const forecastSummary = useMemo(() => {
+    if (!data?.heatmap.points.length) return null;
+    const slots = data.heatmap.points.map(
+      (p) => p.hours.find((h) => h.hour_offset === forecastHour) || p.hours[0],
+    );
+    if (!slots.length) return null;
+    const avgScore = slots.reduce((s, h) => s + (h?.score ?? 1), 0) / slots.length;
+    const counts: Record<string, number> = {};
+    for (const h of slots) {
+      const r = h?.risk || "low";
+      counts[r] = (counts[r] || 0) + 1;
+    }
+    const dominantRisk = (Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ||
+      "low") as import("./types").RiskLevel;
+    const mid = slots[Math.floor(slots.length / 2)];
+    // wind isn't on heatmap hours — approximate from selected route checkpoint if needed
+    const sampleWind =
+      data.routes[0]?.checkpoints[Math.floor((data.routes[0].checkpoints.length || 1) / 2)]
+        ?.weather.wind_mph ?? 0;
+    void mid;
+    return { avgScore, dominantRisk, sampleWind };
+  }, [data, forecastHour]);
+
   return (
     <div className="app">
       <aside className="sidebar">
@@ -73,6 +96,7 @@ export default function App() {
             hour={forecastHour}
             maxHours={data.heatmap.hours}
             label={hourLabel}
+            summary={forecastSummary}
             onChange={setForecastHour}
           />
         )}

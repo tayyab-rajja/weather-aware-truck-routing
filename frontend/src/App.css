@@ -325,6 +325,37 @@ body {
   color: #94a3b8;
 }
 
+.heatmap-slider__hint {
+  margin: 0 0 0.45rem;
+  font-size: 0.72rem;
+  color: #94a3b8;
+  line-height: 1.35;
+}
+
+.forecast-chip {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+  margin-top: 0.55rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.forecast-chip__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
+.forecast-chip strong {
+  display: block;
+  margin-bottom: 0.1rem;
+}
+
 .slider-ends {
   color: #94a3b8;
 }

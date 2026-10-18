@@ -303,25 +303,56 @@ function ensureExtraLayers(map: mapboxgl.Map) {
       id: "heatmap-layer",
       type: "heatmap",
       source: "heatmap",
-      maxzoom: 12,
+      maxzoom: 14,
       paint: {
-        "heatmap-weight": ["interpolate", ["linear"], ["get", "score"], 1, 0.2, 5, 1],
-        "heatmap-intensity": 0.75,
-        "heatmap-radius": 22,
-        "heatmap-opacity": 0.4,
+        "heatmap-weight": ["interpolate", ["linear"], ["get", "score"], 1, 0.35, 5, 1],
+        "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 4, 1.2, 8, 1.8],
+        "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 4, 28, 8, 48],
+        "heatmap-opacity": 0.72,
         "heatmap-color": [
           "interpolate",
           ["linear"],
           ["heatmap-density"],
           0,
           "rgba(0,229,255,0)",
+          0.2,
+          "rgba(42,157,143,0.55)",
           0.4,
-          "rgba(255,140,0,0.4)",
-          0.75,
-          "rgba(231,111,81,0.6)",
+          "rgba(255,200,0,0.65)",
+          0.65,
+          "rgba(255,140,0,0.8)",
+          0.85,
+          "rgba(231,111,81,0.9)",
           1,
-          "rgba(155,34,38,0.8)",
+          "rgba(155,34,38,0.95)",
         ],
+      },
+    });
+    // Clear colored dots so forecast hour changes are obvious on satellite
+    map.addLayer({
+      id: "forecast-dots",
+      type: "circle",
+      source: "heatmap",
+      paint: {
+        "circle-radius": ["interpolate", ["linear"], ["get", "score"], 1, 6, 5, 11],
+        "circle-color": [
+          "match",
+          ["get", "risk"],
+          "low",
+          "#2a9d8f",
+          "moderate",
+          "#e9c46a",
+          "high",
+          "#f4a261",
+          "severe",
+          "#e76f51",
+          "no_travel",
+          "#9b2226",
+          "#2a9d8f",
+        ],
+        "circle-opacity": 0.9,
+        "circle-stroke-width": 2,
+        "circle-stroke-color": "#ffffff",
       },
     });
   }
@@ -483,7 +514,10 @@ function updateHeatmap(map: mapboxgl.Map, data: AnalyzeResponse, hour: number) {
     const slot = p.hours.find((h) => h.hour_offset === hour) || p.hours[0];
     return {
       type: "Feature" as const,
-      properties: { score: slot?.score ?? 1 },
+      properties: {
+        score: slot?.score ?? 1,
+        risk: slot?.risk ?? "low",
+      },
       geometry: { type: "Point" as const, coordinates: [p.lng, p.lat] },
     };
   });
