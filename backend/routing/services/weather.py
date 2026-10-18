@@ -49,7 +49,8 @@ def _fetch_forecast(lat: float, lng: float) -> dict[str, Any]:
         "wind_speed_unit": "ms",
         "precipitation_unit": "mm",
         "temperature_unit": "fahrenheit",
-        "forecast_days": 3,
+        # 16-day free forecast so departure + 48h slider always has real hours
+        "forecast_days": 16,
         "timezone": "UTC",
     }
     resp = requests.get(url, params=params, timeout=25)

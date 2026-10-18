@@ -18,7 +18,6 @@ export function RouteMap({ data, selectedId, forecastHour }: Props) {
   const mapRef = useRef<Map | null>(null);
   const popupRef = useRef<Popup | null>(null);
 
-  // Init map once
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
     const map = new maplibregl.Map({
@@ -29,7 +28,7 @@ export function RouteMap({ data, selectedId, forecastHour }: Props) {
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
     mapRef.current = map;
-    popupRef.current = new maplibregl.Popup({ closeButton: true, maxWidth: "260px" });
+    popupRef.current = new maplibregl.Popup({ closeButton: true, maxWidth: "280px" });
 
     return () => {
       popupRef.current?.remove();
@@ -38,7 +37,6 @@ export function RouteMap({ data, selectedId, forecastHour }: Props) {
     };
   }, []);
 
-  // Draw routes + checkpoints when analysis data / selection changes
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !data) return;
@@ -46,17 +44,16 @@ export function RouteMap({ data, selectedId, forecastHour }: Props) {
     const apply = () => {
       upsertHeatmap(map, data, forecastHour);
       upsertRoutes(map, data.routes, selectedId);
+      upsertRouteLabels(map, data.routes, selectedId);
       upsertCheckpoints(map, data, selectedId, popupRef.current);
       fitToRoutes(map, data.routes);
     };
 
     if (map.isStyleLoaded()) apply();
     else map.once("load", apply);
-    // forecastHour intentionally omitted — slider updates heatmap only
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, selectedId]);
 
-  // Smooth heatmap updates when scrubbing the 48h slider
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !data || !map.getSource("heatmap")) return;
@@ -74,8 +71,9 @@ function upsertRoutes(map: Map, routes: RouteResult[], selectedId: string | null
       recommended: r.is_recommended,
       selected: r.id === selectedId,
       color: r.is_recommended ? "#e76f51" : ROUTE_COLORS[i % ROUTE_COLORS.length],
-      width: r.id === selectedId || r.is_recommended ? 6 : 3,
-      opacity: selectedId && r.id !== selectedId && !r.is_recommended ? 0.35 : 0.9,
+      width: r.id === selectedId || r.is_recommended ? 6 : 3.5,
+      opacity: selectedId && r.id !== selectedId ? 0.45 : 0.95,
+      label: `${r.summary} · ${r.distance_miles.toFixed(0)} mi · ${fmtMin(r.duration_minutes)}`,
     },
     geometry: {
       type: "LineString" as const,
@@ -103,32 +101,78 @@ function upsertRoutes(map: Map, routes: RouteResult[], selectedId: string | null
   }
 }
 
+function upsertRouteLabels(map: Map, routes: RouteResult[], selectedId: string | null) {
+  const features = routes.map((r, i) => {
+    const mid = r.geometry[Math.floor(r.geometry.length / 2)] || r.geometry[0];
+    return {
+      type: "Feature" as const,
+      properties: {
+        label: `${r.summary}${r.is_recommended ? " ★" : ""}`,
+        detail: `${r.distance_miles.toFixed(0)} mi · ${fmtMin(r.duration_minutes)} · risk ${r.metrics.avg_risk.toFixed(2)}`,
+        color: r.is_recommended ? "#e76f51" : ROUTE_COLORS[i % ROUTE_COLORS.length],
+        selected: r.id === selectedId || r.is_recommended,
+      },
+      geometry: { type: "Point" as const, coordinates: mid },
+    };
+  });
+
+  const geojson = { type: "FeatureCollection" as const, features };
+
+  if (map.getSource("route-labels")) {
+    (map.getSource("route-labels") as maplibregl.GeoJSONSource).setData(geojson);
+  } else {
+    map.addSource("route-labels", { type: "geojson", data: geojson });
+    map.addLayer({
+      id: "route-labels-text",
+      type: "symbol",
+      source: "route-labels",
+      layout: {
+        "text-field": ["format", ["get", "label"], "\n", ["get", "detail"]],
+        "text-size": 12,
+        "text-offset": [0, -1.2],
+        "text-anchor": "bottom",
+        "text-allow-overlap": true,
+      },
+      paint: {
+        "text-color": ["get", "color"],
+        "text-halo-color": "#fffdf8",
+        "text-halo-width": 1.5,
+      },
+    });
+  }
+}
+
 function upsertCheckpoints(
   map: Map,
   data: AnalyzeResponse,
   selectedId: string | null,
   popup: Popup | null,
 ) {
-  const route =
-    data.routes.find((r) => r.id === selectedId) ||
-    data.routes.find((r) => r.is_recommended) ||
-    data.routes[0];
-  if (!route) return;
+  // Show checkpoints for ALL routes; emphasize the selected/recommended one
+  const features = data.routes.flatMap((route) => {
+    const focused =
+      route.id === (selectedId || data.recommended_route_id || data.routes[0]?.id);
 
-  const features = route.checkpoints.map((c) => ({
-    type: "Feature" as const,
-    properties: {
-      mile: c.mile,
-      risk: c.risk,
-      color: RISK_COLORS[c.risk as RiskLevel],
-      eta: c.eta,
-      wind: c.weather.wind_mph,
-      rain: c.weather.rain_in_hr,
-      snow: c.weather.snow_in_hr,
-      reasons: c.risk_reasons.join("; "),
-    },
-    geometry: { type: "Point" as const, coordinates: [c.lng, c.lat] },
-  }));
+    return route.checkpoints.map((c) => ({
+      type: "Feature" as const,
+      properties: {
+        routeId: route.id,
+        routeSummary: route.summary,
+        mile: c.mile,
+        risk: c.risk,
+        color: RISK_COLORS[c.risk as RiskLevel],
+        eta: c.eta,
+        wind: c.weather.wind_mph,
+        rain: c.weather.rain_in_hr,
+        snow: c.weather.snow_in_hr,
+        reasons: c.risk_reasons.join("; "),
+        radius: focused ? 7 : 4,
+        opacity: focused ? 1 : 0.55,
+        stroke: focused ? 2 : 1,
+      },
+      geometry: { type: "Point" as const, coordinates: [c.lng, c.lat] },
+    }));
+  });
 
   const geojson = { type: "FeatureCollection" as const, features };
 
@@ -141,9 +185,10 @@ function upsertCheckpoints(
       type: "circle",
       source: "checkpoints",
       paint: {
-        "circle-radius": 7,
+        "circle-radius": ["get", "radius"],
         "circle-color": ["get", "color"],
-        "circle-stroke-width": 2,
+        "circle-opacity": ["get", "opacity"],
+        "circle-stroke-width": ["get", "stroke"],
         "circle-stroke-color": "#fff",
       },
     });
@@ -156,7 +201,7 @@ function upsertCheckpoints(
       popup
         .setLngLat(coords)
         .setHTML(
-          `<strong>Mile ${Number(p.mile).toFixed(0)}</strong><br/>
+          `<strong>${p.routeSummary} · Mile ${Number(p.mile).toFixed(0)}</strong><br/>
            Risk: ${RISK_LABELS[p.risk as RiskLevel] || p.risk}<br/>
            ETA: ${new Date(p.eta).toLocaleString()}<br/>
            Wind ${p.wind} mph · Rain ${p.rain} in/hr · Snow ${p.snow} in/hr<br/>
@@ -234,4 +279,10 @@ function fitToRoutes(map: Map, routes: RouteResult[]) {
   if (any) {
     map.fitBounds(bounds, { padding: 56, maxZoom: 8, duration: 600 });
   }
+}
+
+function fmtMin(min: number): string {
+  const h = Math.floor(min / 60);
+  const m = Math.round(min % 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }

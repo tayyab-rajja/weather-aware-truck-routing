@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from routing.serializers import AnalyzeInputSerializer
-from routing.services.mapbox import MapboxError, suggest_places
+from routing.services.geo import RoutingError, suggest_places
 from routing.services.planner import AnalyzeInput, analyze
 from routing.services.weather import WeatherError
 
@@ -31,7 +31,7 @@ class AnalyzeView(APIView):
                     destination_coords=tuple(dest_coords) if dest_coords else None,
                 )
             )
-        except MapboxError as exc:
+        except RoutingError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
         except WeatherError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
@@ -46,6 +46,6 @@ class GeocodeSuggestView(APIView):
         q = request.query_params.get("q", "")
         try:
             results = suggest_places(q)
-        except MapboxError as exc:
+        except RoutingError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
         return Response({"results": results})

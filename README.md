@@ -5,35 +5,33 @@ React + Django app that helps a truck driver choose the **safest route** based o
 > **GitHub:** https://github.com/SheharyarAhmad1991/weather-aware-truck-routing  
 > **Live app:** https://frontend-kappa-nine-95.vercel.app  
 > **API:** https://backend-flame-ten-24.vercel.app  
->
-> Optional: set backend `MAPBOX_TOKEN` for Mapbox geocoding/routing (preferred). Without it, the API falls back to Nominatim + OSRM. Weather uses Open-Meteo (no key).
+
+**100% free stack** — no paid APIs or paid map tokens required.
 
 ## What it does
 
-1. Geocodes origin & destination (Mapbox)
-2. Fetches up to **3 driving routes** (Mapbox Directions `alternatives=true`)
-3. Samples weather every **10 / 25 / 50 miles** at the truck’s ETA (Open-Meteo)
+1. Geocodes origin & destination (**Nominatim** / OpenStreetMap)
+2. Builds **3 driving route options** (**OSRM** — alternatives + via-point corridors when needed)
+3. Samples weather every **10 / 25 / 50 miles** at the truck’s ETA (**Open-Meteo**)
 4. Scores each checkpoint with the assessment **risk + load rules**
 5. Recommends a route: fewest Severe miles → fewest High → lowest avg risk → shortest time
-6. Shows routes, checkpoints, and a **48-hour forecast heatmap slider** on the map
+6. Shows all routes, checkpoints (risk + ETA), summaries, and a **48-hour forecast heatmap slider**
 
-## Stack
+## Stack (all free)
 
-| Layer | Tech |
-| --- | --- |
-| Frontend | Vite, React, TypeScript, MapLibre GL |
-| Backend | Django 4, DRF |
-| Routing / geocode | Mapbox (preferred) or Nominatim + OSRM fallback |
-| Weather | Open-Meteo (no API key) |
-| Host | Vercel (frontend + Django API) |
+| Layer | Tech | Cost |
+| --- | --- | --- |
+| Frontend | Vite, React, TypeScript, MapLibre GL | Free |
+| Basemap | OpenFreeMap | Free, no token |
+| Backend | Django 4 + DRF | Free |
+| Geocode | Nominatim | Free, no key |
+| Routing | OSRM public API | Free, no key |
+| Weather | Open-Meteo | Free, no key |
+| Host | Vercel Hobby | Free tier |
 
 ## Quick start
 
-### 1. Mapbox token
-
-Create a token at [account.mapbox.com](https://account.mapbox.com/access-tokens/).
-
-### 2. Backend
+### Backend
 
 ```bash
 cd backend
@@ -41,7 +39,7 @@ python -m venv .venv
 # Windows: .venv\Scripts\activate
 # macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env   # set MAPBOX_TOKEN
+cp .env.example .env
 python manage.py migrate
 python manage.py runserver
 ```
@@ -49,10 +47,10 @@ python manage.py runserver
 API: `http://localhost:8000` · health: `/healthz/`
 
 ```bash
-pytest   # 24 unit tests for risk, recommend, sampling
+pytest
 ```
 
-### 3. Frontend
+### Frontend
 
 ```bash
 cd frontend
@@ -77,20 +75,13 @@ App: `http://localhost:5173`
 }
 ```
 
-Optional: `origin_coords` / `destination_coords` as `[lng, lat]` from autocomplete.
-
-**Response (shape):**
-
-- `routes[]` — `id`, `summary`, `distance_miles`, `duration_minutes`, `geometry`, `checkpoints[]`, `metrics`, `is_recommended`, `recommendation_reason`
-- `checkpoints[]` — `mile`, `eta`, `lng`, `lat`, `weather`, `risk`, `risk_reasons`
-- `recommended_route_id`
-- `heatmap` — corridor points with `hours[0..47]` risk scores for the slider
+**Response:** `routes[]` (geometry, checkpoints with weather/risk/ETA, metrics), `recommended_route_id`, `heatmap` (48 hourly scores along the corridor).
 
 ### `GET /api/geocode/?q=`
 
-Autocomplete suggestions for the form.
+Free Nominatim autocomplete for the form.
 
-## Risk rules
+## Risk rules (from assessment)
 
 Worst of wind / rain / snow, then load overrides:
 
@@ -108,17 +99,9 @@ Worst of wind / rain / snow, then load overrides:
 - Wind 45–54 mph + load &gt;30,000 lb → No Travel
 - Wind 35–44 mph + load &gt;40,000 lb → Severe
 
-Segment miles between checkpoints are attributed to the **arrival** checkpoint’s risk. `no_travel` miles count toward severe miles for recommendation ranking.
+**Recommendation order:** fewest Severe miles → fewest High miles → lowest average risk → shortest travel time.
 
-## Deploy
-
-Already hosted on Vercel (see URLs at top). To redeploy:
-
-**Backend:** from `backend/`, `npx vercel --prod`. Set env: `SECRET_KEY`, `ALLOWED_HOSTS=.vercel.app`, `CORS_ALLOWED_ORIGINS=<frontend URL>`, optional `MAPBOX_TOKEN`.
-
-**Frontend:** from `frontend/`, `npx vercel --prod`. Set `VITE_API_URL` to the backend origin.
-
-`backend/render.yaml` + `Procfile` are also included if you prefer Render for the API.
+Segment miles between checkpoints are attributed to the **arrival** checkpoint’s risk. `no_travel` miles count toward severe miles for ranking.
 
 ## Loom
 
@@ -127,7 +110,7 @@ See [LOOM.md](LOOM.md) for a 5–10 minute walkthrough script.
 ## Project layout
 
 ```
-backend/routing/services/   # mapbox, sampling, weather, risk, metrics, recommend, planner
+backend/routing/services/   # geo, sampling, weather, risk, metrics, recommend, planner
 frontend/src/components/    # form, map, route panel, heatmap slider
 plan                        # build plan
 fs-assessment-spotter.md    # original brief
