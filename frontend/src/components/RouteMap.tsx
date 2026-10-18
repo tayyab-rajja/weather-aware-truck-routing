@@ -1,15 +1,39 @@
-import { useEffect, useRef, type MutableRefObject } from "react";
+/**
+ * Map patterned after RoadWatch-ELD MapView:
+ *  - raster basemap (always visible, no API key)
+ *  - ResizeObserver + nudge() so the GL canvas fills the panel
+ *  - GSAP draw-on for route polylines
+ *  - DOM markers for checkpoints (no map text labels)
+ */
+import { useEffect, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
-import type { GeoJSONSource, Map, Popup } from "maplibre-gl";
+import type { GeoJSONSource, Map as MlMap, Marker } from "maplibre-gl";
+import gsap from "gsap";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { AnalyzeResponse, RiskLevel, RouteResult } from "../types";
 import { RISK_COLORS, RISK_LABELS } from "../lib/riskColors";
-
-/** Free Carto Voyager — roads, cities, readable, no API key */
-const MAP_STYLE = "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json";
+import "./RouteMap.css";
 
 const ROUTE_COLORS = ["#0f766e", "#2563eb", "#7c3aed"];
 const RECOMMENDED = "#ea580c";
+
+/** Free raster tiles — reliable, no token, cities/roads visible */
+const BASEMAP_STYLE: maplibregl.StyleSpecification = {
+  version: 8,
+  sources: {
+    carto: {
+      type: "raster",
+      tiles: [
+        "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+        "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+        "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+      ],
+      tileSize: 256,
+      attribution: "© CARTO © OpenStreetMap",
+    },
+  },
+  layers: [{ id: "carto", type: "raster", source: "carto" }],
+};
 
 interface Props {
   data: AnalyzeResponse | null;
@@ -19,301 +43,277 @@ interface Props {
 
 export function RouteMap({ data, selectedId, forecastHour }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<Map | null>(null);
-  const popupRef = useRef<Popup | null>(null);
+  const mapRef = useRef<MlMap | null>(null);
   const readyRef = useRef(false);
-  const animRef = useRef<number | null>(null);
-  const clickBoundRef = useRef(false);
-  const lastDataIdRef = useRef<string | null>(null);
+  const markersRef = useRef<Marker[]>([]);
+  const tweensRef = useRef<gsap.core.Tween[]>([]);
+  const lastTripKey = useRef<string>("");
+  const [phase, setPhase] = useState<"loading" | "ready" | "error">("loading");
 
-  // Create map once
+  // Create map once — always show basemap at start (RoadWatch pattern)
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: MAP_STYLE,
+      style: BASEMAP_STYLE,
       center: [-87.6, 41.8],
-      zoom: 5,
-      attributionControl: { compact: true },
+      zoom: 5.2,
+      attributionControl: false,
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
     mapRef.current = map;
-    popupRef.current = new maplibregl.Popup({
-      closeButton: true,
-      maxWidth: "280px",
-      className: "route-popup",
+
+    map.on("load", () => {
+      readyRef.current = true;
+      setPhase("ready");
+      ensureHeatSource(map);
+      nudge(map);
+    });
+    map.on("error", (e) => {
+      console.error("[map]", e.error);
+      // Don't blank the UI for a single tile error
     });
 
-    const onReady = () => {
+    const observer = new ResizeObserver(() => map.resize());
+    observer.observe(containerRef.current);
+    const safety = window.setTimeout(() => {
       readyRef.current = true;
+      setPhase((p) => (p === "loading" ? "ready" : p));
       map.resize();
-    };
-    map.on("load", onReady);
-
-    const onResize = () => map.resize();
-    window.addEventListener("resize", onResize);
+    }, 2000);
 
     return () => {
-      window.removeEventListener("resize", onResize);
-      if (animRef.current) cancelAnimationFrame(animRef.current);
-      popupRef.current?.remove();
+      window.clearTimeout(safety);
+      observer.disconnect();
+      killTweens(tweensRef.current);
+      markersRef.current.forEach((m) => m.remove());
+      markersRef.current = [];
+      readyRef.current = false;
       map.remove();
       mapRef.current = null;
-      readyRef.current = false;
     };
   }, []);
 
-  // Paint routes / checkpoints when analysis or selection changes
+  // Draw routes when analysis data arrives / selection changes
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !data) return;
+    if (!map || !data?.routes.length) return;
 
-    const run = () => {
-      map.resize();
-      ensureLayers(map, clickBoundRef, popupRef.current);
+    const tripKey = data.routes.map((r) => `${r.id}:${r.distance_miles}`).join("|");
+    const isNewTrip = tripKey !== lastTripKey.current;
 
-      const dataKey = `${data.recommended_route_id}-${data.routes.map((r) => r.id).join(",")}-${data.sample_interval_miles}`;
-      const isNewTrip = lastDataIdRef.current !== dataKey;
-      lastDataIdRef.current = dataKey;
-
+    const render = () => {
+      ensureHeatSource(map);
       updateHeatmap(map, data, forecastHour);
-      updateCheckpoints(map, data, selectedId);
 
       if (isNewTrip) {
+        lastTripKey.current = tripKey;
+        killTweens(tweensRef.current);
+        tweensRef.current = drawRoutesAnimated(map, data.routes, selectedId);
         fitToRoutes(map, data.routes);
-        animateRoutesDraw(map, data.routes, selectedId, animRef);
       } else {
-        setRoutesFull(map, data.routes, selectedId);
+        restyleRoutes(map, data.routes, selectedId);
       }
+
+      markersRef.current.forEach((m) => m.remove());
+      markersRef.current = addCheckpointMarkers(map, data, selectedId);
+      nudge(map);
     };
 
-    if (readyRef.current || map.isStyleLoaded()) {
-      run();
-    } else {
-      map.once("load", () => {
-        readyRef.current = true;
-        run();
-      });
-    }
-    // forecastHour handled separately for speed
+    if (readyRef.current) render();
+    else map.once("load", render);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, selectedId]);
 
-  // Fast heatmap-only update while scrubbing
+  // Fast heatmap-only updates
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !data || !map.getSource("heatmap")) return;
+    if (!map || !data || !readyRef.current || !map.getSource("heatmap")) return;
     updateHeatmap(map, data, forecastHour);
   }, [data, forecastHour]);
 
-  return <div className="map-root" ref={containerRef} />;
+  return (
+    <div className="route-map">
+      <div ref={containerRef} className="route-map__canvas" />
+      {phase === "loading" && (
+        <div className="route-map__overlay">
+          <span className="route-map__spinner" />
+          Loading map…
+        </div>
+      )}
+    </div>
+  );
 }
 
-function ensureLayers(
-  map: Map,
-  clickBoundRef: MutableRefObject<boolean>,
-  popup: Popup | null,
-) {
-  if (!map.getSource("heatmap")) {
-    map.addSource("heatmap", emptyFc());
-    map.addLayer({
-      id: "heatmap-layer",
-      type: "heatmap",
-      source: "heatmap",
-      maxzoom: 11,
-      paint: {
-        "heatmap-weight": ["interpolate", ["linear"], ["get", "score"], 1, 0.15, 5, 1],
-        "heatmap-intensity": 0.9,
-        "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 4, 18, 8, 32],
-        "heatmap-opacity": 0.45,
-        "heatmap-color": [
-          "interpolate",
-          ["linear"],
-          ["heatmap-density"],
-          0,
-          "rgba(42,157,143,0)",
-          0.25,
-          "rgba(42,157,143,0.35)",
-          0.45,
-          "rgba(233,196,106,0.55)",
-          0.65,
-          "rgba(244,162,97,0.65)",
-          0.85,
-          "rgba(231,111,81,0.75)",
-          1,
-          "rgba(155,34,38,0.85)",
-        ],
-      },
-    });
-  }
-
-  if (!map.getSource("routes")) {
-    map.addSource("routes", emptyFc());
-    // Soft casing under the route for contrast on pale terrain
-    map.addLayer({
-      id: "routes-casing",
-      type: "line",
-      source: "routes",
-      layout: { "line-join": "round", "line-cap": "round" },
-      paint: {
-        "line-color": "#ffffff",
-        "line-width": ["+", ["get", "width"], 4],
-        "line-opacity": 0.9,
-      },
-    });
-    map.addLayer({
-      id: "routes-line",
-      type: "line",
-      source: "routes",
-      layout: { "line-join": "round", "line-cap": "round" },
-      paint: {
-        "line-color": ["get", "color"],
-        "line-width": ["get", "width"],
-        "line-opacity": ["get", "opacity"],
-      },
-    });
-  }
-
-  if (!map.getSource("checkpoints")) {
-    map.addSource("checkpoints", emptyFc());
-    map.addLayer({
-      id: "checkpoints-circle",
-      type: "circle",
-      source: "checkpoints",
-      paint: {
-        "circle-radius": ["get", "radius"],
-        "circle-color": ["get", "color"],
-        "circle-opacity": ["get", "opacity"],
-        "circle-stroke-width": ["get", "stroke"],
-        "circle-stroke-color": "#ffffff",
-      },
-    });
-  }
-
-  if (!clickBoundRef.current) {
-    clickBoundRef.current = true;
-    map.on("click", "checkpoints-circle", (e) => {
-      const f = e.features?.[0];
-      if (!f || !popup) return;
-      const p = f.properties!;
-      const coords = (f.geometry as { coordinates: [number, number] }).coordinates;
-      popup
-        .setLngLat(coords)
-        .setHTML(
-          `<div class="popup-card">
-            <strong>${escapeHtml(String(p.routeSummary))} · mi ${Number(p.mile).toFixed(0)}</strong>
-            <div>Risk: ${RISK_LABELS[p.risk as RiskLevel] || p.risk}</div>
-            <div>ETA: ${new Date(String(p.eta)).toLocaleString()}</div>
-            <div>Wind ${p.wind} mph · Rain ${p.rain} · Snow ${p.snow}</div>
-            <em>${escapeHtml(String(p.reasons || ""))}</em>
-          </div>`,
-        )
-        .addTo(map);
-    });
-    map.on("mouseenter", "checkpoints-circle", () => {
-      map.getCanvas().style.cursor = "pointer";
-    });
-    map.on("mouseleave", "checkpoints-circle", () => {
-      map.getCanvas().style.cursor = "";
-    });
-  }
-}
-
-function routeFeatures(routes: RouteResult[], selectedId: string | null, progress = 1) {
-  return routes.map((r, i) => {
-    const focused = r.id === selectedId || r.is_recommended;
-    const coords = sliceLine(r.geometry, progress);
-    return {
-      type: "Feature" as const,
-      properties: {
-        id: r.id,
-        color: r.is_recommended ? RECOMMENDED : ROUTE_COLORS[i % ROUTE_COLORS.length],
-        width: focused ? 5.5 : 3.25,
-        opacity: selectedId && r.id !== selectedId ? 0.4 : 0.95,
-      },
-      geometry: {
-        type: "LineString" as const,
-        coordinates: coords.length >= 2 ? coords : r.geometry.slice(0, 2),
-      },
-    };
+function ensureHeatSource(map: MlMap) {
+  if (map.getSource("heatmap")) return;
+  map.addSource("heatmap", {
+    type: "geojson",
+    data: { type: "FeatureCollection", features: [] },
+  });
+  map.addLayer({
+    id: "heatmap-layer",
+    type: "heatmap",
+    source: "heatmap",
+    maxzoom: 12,
+    paint: {
+      "heatmap-weight": ["interpolate", ["linear"], ["get", "score"], 1, 0.2, 5, 1],
+      "heatmap-intensity": 0.85,
+      "heatmap-radius": 26,
+      "heatmap-opacity": 0.4,
+      "heatmap-color": [
+        "interpolate",
+        ["linear"],
+        ["heatmap-density"],
+        0,
+        "rgba(15,118,110,0)",
+        0.3,
+        "rgba(15,118,110,0.4)",
+        0.55,
+        "rgba(234,179,8,0.55)",
+        0.75,
+        "rgba(234,88,12,0.65)",
+        1,
+        "rgba(153,27,27,0.8)",
+      ],
+    },
   });
 }
 
-function setRoutesFull(map: Map, routes: RouteResult[], selectedId: string | null) {
-  const src = map.getSource("routes") as GeoJSONSource | undefined;
-  if (!src) return;
-  src.setData({
-    type: "FeatureCollection",
-    features: routeFeatures(routes, selectedId, 1),
-  });
-}
-
-function animateRoutesDraw(
-  map: Map,
+/** One source + casing/line layer per route — fixed paints like RoadWatch */
+function drawRoutesAnimated(
+  map: MlMap,
   routes: RouteResult[],
   selectedId: string | null,
-  animRef: MutableRefObject<number | null>,
-) {
-  if (animRef.current) cancelAnimationFrame(animRef.current);
-  const src = map.getSource("routes") as GeoJSONSource | undefined;
-  if (!src) return;
+): gsap.core.Tween[] {
+  // Clear previous route layers
+  for (let i = 0; i < 6; i++) {
+    const id = `route-${i}`;
+    if (map.getLayer(`${id}-casing`)) map.removeLayer(`${id}-casing`);
+    if (map.getLayer(`${id}-line`)) map.removeLayer(`${id}-line`);
+    if (map.getSource(id)) map.removeSource(id);
+  }
 
-  const duration = 900;
-  const start = performance.now();
+  const tweens: gsap.core.Tween[] = [];
 
-  const tick = (now: number) => {
-    const t = Math.min(1, (now - start) / duration);
-    // ease-out cubic — soothing
-    const eased = 1 - (1 - t) ** 3;
-    src.setData({
-      type: "FeatureCollection",
-      features: routeFeatures(routes, selectedId, eased),
-    });
-    if (t < 1) {
-      animRef.current = requestAnimationFrame(tick);
-    } else {
-      animRef.current = null;
-    }
-  };
+  routes.forEach((route, i) => {
+    const id = `route-${i}`;
+    const color = route.is_recommended ? RECOMMENDED : ROUTE_COLORS[i % ROUTE_COLORS.length];
+    const focused = route.id === selectedId || route.is_recommended;
+    const width = focused ? 5.5 : 3.5;
+    const opacity = selectedId && route.id !== selectedId ? 0.35 : 0.95;
+    const coords = route.geometry as [number, number][];
 
-  // Start nearly empty so the draw-on is visible
-  src.setData({
-    type: "FeatureCollection",
-    features: routeFeatures(routes, selectedId, 0.02),
-  });
-  animRef.current = requestAnimationFrame(tick);
-}
+    map.addSource(id, { type: "geojson", data: lineFeature(coords.slice(0, 2)) });
 
-function updateCheckpoints(map: Map, data: AnalyzeResponse, selectedId: string | null) {
-  const focusId = selectedId || data.recommended_route_id || data.routes[0]?.id;
-  const features = data.routes.flatMap((route) => {
-    const focused = route.id === focusId;
-    return route.checkpoints.map((c) => ({
-      type: "Feature" as const,
-      properties: {
-        routeSummary: route.summary,
-        mile: c.mile,
-        risk: c.risk,
-        color: RISK_COLORS[c.risk as RiskLevel],
-        eta: c.eta,
-        wind: c.weather.wind_mph,
-        rain: c.weather.rain_in_hr,
-        snow: c.weather.snow_in_hr,
-        reasons: (c.risk_reasons || []).join("; "),
-        radius: focused ? 7 : 4.5,
-        opacity: focused ? 1 : 0.5,
-        stroke: focused ? 2.5 : 1.25,
+    map.addLayer({
+      id: `${id}-casing`,
+      type: "line",
+      source: id,
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": "#ffffff",
+        "line-width": width + 4,
+        "line-opacity": 0.85,
+        "line-blur": 0.2,
       },
-      geometry: { type: "Point" as const, coordinates: [c.lng, c.lat] },
-    }));
+    });
+    map.addLayer({
+      id: `${id}-line`,
+      type: "line",
+      source: id,
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": color,
+        "line-width": width,
+        "line-opacity": opacity,
+        "line-blur": 0.35,
+      },
+    });
+
+    // Move route layers above heatmap
+    if (map.getLayer("heatmap-layer")) {
+      try {
+        map.moveLayer(`${id}-casing`);
+        map.moveLayer(`${id}-line`);
+      } catch {
+        /* ignore */
+      }
+    }
+
+    const source = map.getSource(id) as GeoJSONSource;
+    const progress = { n: 2 };
+    const tween = gsap.to(progress, {
+      n: coords.length,
+      duration: 1.35,
+      delay: i * 0.12,
+      ease: "power2.inOut",
+      onUpdate: () => {
+        const n = Math.max(2, Math.round(progress.n));
+        source.setData(lineFeature(coords.slice(0, n)));
+      },
+      onComplete: () => source.setData(lineFeature(coords)),
+    });
+    tweens.push(tween);
   });
 
-  const src = map.getSource("checkpoints") as GeoJSONSource | undefined;
-  src?.setData({ type: "FeatureCollection", features });
+  return tweens;
 }
 
-function updateHeatmap(map: Map, data: AnalyzeResponse, hour: number) {
+function restyleRoutes(map: MlMap, routes: RouteResult[], selectedId: string | null) {
+  routes.forEach((route, i) => {
+    const id = `route-${i}`;
+    if (!map.getLayer(`${id}-line`)) return;
+    const color = route.is_recommended ? RECOMMENDED : ROUTE_COLORS[i % ROUTE_COLORS.length];
+    const focused = route.id === selectedId || route.is_recommended;
+    const width = focused ? 5.5 : 3.5;
+    const opacity = selectedId && route.id !== selectedId ? 0.35 : 0.95;
+    map.setPaintProperty(`${id}-line`, "line-color", color);
+    map.setPaintProperty(`${id}-line`, "line-width", width);
+    map.setPaintProperty(`${id}-line`, "line-opacity", opacity);
+    map.setPaintProperty(`${id}-casing`, "line-width", width + 4);
+  });
+}
+
+function addCheckpointMarkers(
+  map: MlMap,
+  data: AnalyzeResponse,
+  selectedId: string | null,
+): Marker[] {
+  const focusId = selectedId || data.recommended_route_id || data.routes[0]?.id;
+  const markers: Marker[] = [];
+
+  for (const route of data.routes) {
+    const focused = route.id === focusId;
+    for (const cp of route.checkpoints) {
+      const el = document.createElement("div");
+      el.className = focused ? "map-cp" : "map-cp map-cp--dim";
+      el.style.setProperty("--cp-color", RISK_COLORS[cp.risk as RiskLevel]);
+      el.title = `${route.summary} · mi ${cp.mile}`;
+
+      const popup = new maplibregl.Popup({ offset: 14, closeButton: false }).setHTML(
+        `<div class="map-popup">
+          <strong>${escapeHtml(route.summary)} · mi ${cp.mile.toFixed(0)}</strong>
+          <span>Risk: ${RISK_LABELS[cp.risk]}</span>
+          <span class="map-popup__meta">${new Date(cp.eta).toLocaleString()}</span>
+          <span class="map-popup__meta">Wind ${cp.weather.wind_mph} · Rain ${cp.weather.rain_in_hr} · Snow ${cp.weather.snow_in_hr}</span>
+          <span class="map-popup__meta">${escapeHtml((cp.risk_reasons || []).join("; "))}</span>
+        </div>`,
+      );
+
+      markers.push(
+        new maplibregl.Marker({ element: el, anchor: "center" })
+          .setLngLat([cp.lng, cp.lat])
+          .setPopup(popup)
+          .addTo(map),
+      );
+    }
+  }
+  return markers;
+}
+
+function updateHeatmap(map: MlMap, data: AnalyzeResponse, hour: number) {
   const features = data.heatmap.points.map((p) => {
     const slot = p.hours.find((h) => h.hour_offset === hour) || p.hours[0];
     return {
@@ -326,7 +326,7 @@ function updateHeatmap(map: Map, data: AnalyzeResponse, hour: number) {
   src?.setData({ type: "FeatureCollection", features });
 }
 
-function fitToRoutes(map: Map, routes: RouteResult[]) {
+function fitToRoutes(map: MlMap, routes: RouteResult[]) {
   const bounds = new maplibregl.LngLatBounds();
   let any = false;
   for (const r of routes) {
@@ -336,40 +336,33 @@ function fitToRoutes(map: Map, routes: RouteResult[]) {
     }
   }
   if (any) {
-    map.fitBounds(bounds, { padding: 64, maxZoom: 7.5, duration: 850, essential: true });
+    map.fitBounds(bounds, { padding: 70, duration: 1100, maxZoom: 7.8 });
   }
 }
 
-/** Progressively reveal a polyline (0..1). */
-function sliceLine(coords: [number, number][] | number[][], progress: number): number[][] {
-  if (!coords.length) return [];
-  if (progress >= 0.999) return coords as number[][];
-  if (progress <= 0) return [coords[0] as number[]];
-
-  const total = coords.length - 1;
-  const target = progress * total;
-  const i = Math.floor(target);
-  const frac = target - i;
-  const out = coords.slice(0, i + 1).map((c) => [c[0], c[1]]);
-  if (i + 1 < coords.length) {
-    const a = coords[i];
-    const b = coords[i + 1];
-    out.push([a[0] + (b[0] - a[0]) * frac, a[1] + (b[1] - a[1]) * frac]);
-  }
-  return out;
-}
-
-function emptyFc() {
+function lineFeature(coords: [number, number][]) {
   return {
-    type: "geojson" as const,
-    data: { type: "FeatureCollection" as const, features: [] as never[] },
+    type: "Feature" as const,
+    properties: {},
+    geometry: { type: "LineString" as const, coordinates: coords },
   };
 }
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+function nudge(map: MlMap) {
+  [0, 120, 400, 800].forEach((delay) =>
+    window.setTimeout(() => {
+      if (!map.getContainer().isConnected) return;
+      map.resize();
+      map.triggerRepaint();
+    }, delay),
+  );
+}
+
+function killTweens(tweens: gsap.core.Tween[]) {
+  tweens.forEach((t) => t.kill());
+  tweens.length = 0;
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 }

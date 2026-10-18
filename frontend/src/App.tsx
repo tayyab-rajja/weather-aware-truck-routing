@@ -47,6 +47,10 @@ export default function App() {
       <aside className="sidebar">
         <TripForm loading={loading} onSubmit={handleSubmit} />
         {error && <div className="error">{error}</div>}
+        {loading && <p className="status-line">Sampling weather along alternate routes…</p>}
+        {!data && !loading && !error && (
+          <p className="status-line">Submit a trip to compare up to three weather-scored routes.</p>
+        )}
         {data && (
           <RoutePanel data={data} selectedId={selectedId} onSelect={setSelectedId} />
         )}
@@ -62,6 +66,7 @@ export default function App() {
       </aside>
 
       <main className="main">
+        {/* Map always mounts so basemap is visible from the start */}
         <RouteMap data={data} selectedId={selectedId} forecastHour={forecastHour} />
         {data && (
           <HeatmapSlider
@@ -71,12 +76,6 @@ export default function App() {
             onChange={setForecastHour}
           />
         )}
-        {!data && !loading && (
-          <div className="map-empty">
-            Enter a trip and analyze to see routes, checkpoints, and the weather heatmap.
-          </div>
-        )}
-        {loading && <div className="map-empty">Sampling weather along alternate routes…</div>}
       </main>
     </div>
   );

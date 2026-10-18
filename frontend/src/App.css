@@ -286,20 +286,11 @@ body {
   font-size: 0.78rem;
 }
 
-.map-empty {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  background: rgba(255, 253, 248, 0.92);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 1rem 1.25rem;
-  max-width: 360px;
-  text-align: center;
-  box-shadow: var(--shadow);
-  pointer-events: none;
-  z-index: 2;
+.status-line {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+  line-height: 1.4;
 }
 
 .heatmap-slider {
