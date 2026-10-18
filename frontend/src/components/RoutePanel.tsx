@@ -1,5 +1,6 @@
 import type { AnalyzeResponse, RouteResult } from "../types";
 import { RISK_LABELS } from "../lib/riskColors";
+import { ROUTE_PALETTE } from "./RouteMap";
 
 interface Props {
   data: AnalyzeResponse;
@@ -18,10 +19,11 @@ export function RoutePanel({ data, selectedId, onSelect }: Props) {
     <div className="route-panel">
       <h2>Routes</h2>
       <ul>
-        {data.routes.map((r) => (
+        {data.routes.map((r, i) => (
           <RouteCard
             key={r.id}
             route={r}
+            color={ROUTE_PALETTE[i % ROUTE_PALETTE.length]}
             active={r.id === selectedId}
             onSelect={() => onSelect(r.id)}
           />
@@ -33,10 +35,12 @@ export function RoutePanel({ data, selectedId, onSelect }: Props) {
 
 function RouteCard({
   route,
+  color,
   active,
   onSelect,
 }: {
   route: RouteResult;
+  color: string;
   active: boolean;
   onSelect: () => void;
 }) {
@@ -46,9 +50,13 @@ function RouteCard({
         type="button"
         className={`route-card ${active ? "active" : ""} ${route.is_recommended ? "recommended" : ""}`}
         onClick={onSelect}
+        style={{ borderLeftColor: color, borderLeftWidth: 4 }}
       >
         <div className="route-card-head">
-          <strong>{route.summary || route.id}</strong>
+          <strong>
+            <i className="route-swatch" style={{ background: color }} />
+            {route.summary || route.id}
+          </strong>
           {route.is_recommended && <span className="badge">Recommended</span>}
         </div>
         <div className="route-stats">

@@ -200,6 +200,19 @@ body {
   margin-bottom: 0.45rem;
 }
 
+.route-card-head strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.route-swatch {
+  width: 14px;
+  height: 4px;
+  border-radius: 99px;
+  display: inline-block;
+}
+
 .badge {
   background: var(--accent);
   color: #fff;
@@ -296,15 +309,24 @@ body {
 .heatmap-slider {
   position: absolute;
   left: 50%;
-  bottom: 1.25rem;
+  bottom: 0.75rem;
   transform: translateX(-50%);
-  width: min(520px, calc(100% - 2rem));
-  background: rgba(255, 253, 248, 0.95);
-  border: 1px solid var(--line);
+  width: min(460px, calc(100% - 1.5rem));
+  background: rgba(10, 14, 20, 0.88);
+  color: #e8eef5;
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 14px;
-  padding: 0.75rem 1rem;
-  box-shadow: var(--shadow);
+  padding: 0.65rem 1rem;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
   z-index: 3;
+}
+
+.heatmap-slider-head span {
+  color: #94a3b8;
+}
+
+.slider-ends {
+  color: #94a3b8;
 }
 
 .heatmap-slider-head {

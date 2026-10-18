@@ -1,9 +1,8 @@
 .route-map {
-  position: relative;
   position: absolute;
   inset: 0;
   overflow: hidden;
-  background: #0a0e14;
+  background: #0b1220;
 }
 
 .route-map__canvas {
@@ -13,7 +12,6 @@
   height: 100%;
 }
 
-/* RoadWatch: never transform the GL canvas parent */
 .route-map__canvas .mapboxgl-map,
 .route-map__canvas .mapboxgl-canvas {
   width: 100% !important;
@@ -29,7 +27,7 @@
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  background: rgba(10, 14, 20, 0.85);
+  background: rgba(11, 18, 32, 0.82);
   color: #e8eef5;
   font-size: 0.9rem;
   pointer-events: none;
@@ -41,15 +39,11 @@
   padding: 1.5rem;
 }
 
-.route-map__overlay--error strong {
-  color: #f87171;
-}
-
 .route-map__spinner {
   width: 22px;
   height: 22px;
   border: 2px solid #334155;
-  border-top-color: #f4a338;
+  border-top-color: #ff8c00;
   border-radius: 50%;
   animation: rm-spin 0.7s linear infinite;
 }
@@ -60,21 +54,30 @@
   }
 }
 
+.map-truck {
+  font-size: 28px;
+  line-height: 1;
+  filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.75));
+  transform: scaleX(-1);
+  pointer-events: none;
+  z-index: 5;
+}
+
 .map-cp {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   background: var(--cp-color, #2a9d8f);
   border: 2px solid #fff;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cp-color) 35%, transparent),
-    0 2px 6px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cp-color) 40%, transparent),
+    0 2px 6px rgba(0, 0, 0, 0.5);
   cursor: pointer;
 }
 
 .map-cp--dim {
-  width: 9px;
-  height: 9px;
-  opacity: 0.45;
+  width: 8px;
+  height: 8px;
+  opacity: 0.4;
   box-shadow: none;
 }
 
@@ -84,14 +87,13 @@
   gap: 2px;
   min-width: 160px;
   font-size: 13px;
-  line-height: 1.35;
   color: #0a0e14;
 }
 
 .map-popup strong {
   font-size: 12px;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
   color: #c2410c;
 }
 
@@ -103,4 +105,99 @@
 .mapboxgl-popup-content {
   border-radius: 10px;
   padding: 10px 12px;
+}
+
+.truck-scrubber {
+  position: absolute;
+  left: 50%;
+  bottom: 5.5rem;
+  transform: translateX(-50%);
+  width: min(460px, calc(100% - 1.5rem));
+  z-index: 4;
+  background: rgba(10, 14, 20, 0.88);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 0.75rem 1rem;
+  color: #e8eef5;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+}
+
+.truck-scrubber__head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  margin-bottom: 0.35rem;
+}
+
+.truck-scrubber input[type="range"] {
+  width: 100%;
+  accent-color: #ff8c00;
+}
+
+.truck-scrubber__ends {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: #94a3b8;
+}
+
+.weather-chip {
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+  margin-top: 0.65rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.weather-chip__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+.weather-chip strong {
+  display: block;
+  font-size: 0.78rem;
+  margin-bottom: 0.15rem;
+}
+
+.route-color-legend {
+  position: absolute;
+  top: 0.85rem;
+  left: 0.85rem;
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem 0.85rem;
+  padding: 0.55rem 0.75rem;
+  background: rgba(10, 14, 20, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  color: #e8eef5;
+  font-size: 0.75rem;
+}
+
+.route-color-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  opacity: 0.75;
+}
+
+.route-color-legend span.active {
+  opacity: 1;
+  font-weight: 650;
+}
+
+.route-color-legend i {
+  width: 12px;
+  height: 4px;
+  border-radius: 99px;
+  display: inline-block;
 }
