@@ -1,5 +1,8 @@
 """
 Orchestrates: geocode → directions → sample → weather → risk → metrics → recommend → heatmap.
+
+Speed strategy: sample all points first, prefetch weather for unique grid cells
+in one/few Open-Meteo calls, then score everything from cache.
 """
 from __future__ import annotations
 
@@ -12,7 +15,7 @@ from routing.services.geo import Place, RoutingError
 from routing.services.metrics import ScoredCheckpoint, compute_metrics
 from routing.services.recommend import pick_recommended, why_recommended
 from routing.services.risk import assess_risk
-from routing.services.sampling import sample_checkpoints
+from routing.services.sampling import Checkpoint, sample_checkpoints
 from routing.services.weather import WeatherError
 
 
@@ -28,7 +31,9 @@ class AnalyzeInput:
 
 
 HEATMAP_HOURS = 48
-HEATMAP_POINT_INTERVAL_MILES = 50
+# Fewer heatmap cells = faster; still enough for the 48h slider
+HEATMAP_POINT_INTERVAL_MILES = 80
+HEATMAP_MAX_POINTS = 8
 
 
 def analyze(data: AnalyzeInput) -> dict[str, Any]:
@@ -36,18 +41,38 @@ def analyze(data: AnalyzeInput) -> dict[str, Any]:
     destination = _resolve(data.destination, data.destination_coords)
     raw_routes = geo.directions(origin, destination)
 
+    # 1) Sample checkpoints for every route (no network)
+    route_cps: list[list[Checkpoint]] = []
+    for raw in raw_routes:
+        route_cps.append(
+            sample_checkpoints(
+                raw.geometry,
+                total_miles=raw.distance_miles,
+                duration_minutes=raw.duration_minutes,
+                departure_at=data.departure_at,
+                interval_miles=float(data.sample_interval_miles),
+            )
+        )
+
+    # 2) Heatmap sample points along primary corridor only (cheaper)
+    heat_geom = raw_routes[0].geometry if raw_routes else []
+    heat_miles = raw_routes[0].distance_miles if raw_routes else 0.0
+    heat_cps = _heatmap_checkpoints(heat_geom, heat_miles, data.departure_at)
+
+    # 3) Prefetch weather for all unique cells in parallel/batch
+    locs: list[tuple[float, float]] = []
+    for cps in route_cps:
+        for cp in cps:
+            locs.append((cp.lat, cp.lng))
+    for cp in heat_cps:
+        locs.append((cp.lat, cp.lng))
+    weather.prefetch(locs)
+
+    # 4) Score routes from warm cache
     built: list[dict[str, Any]] = []
     metrics_pairs: list[tuple[str, Any]] = []
 
-    for raw in raw_routes:
-        cps = sample_checkpoints(
-            raw.geometry,
-            total_miles=raw.distance_miles,
-            duration_minutes=raw.duration_minutes,
-            departure_at=data.departure_at,
-            interval_miles=float(data.sample_interval_miles),
-        )
-
+    for raw, cps in zip(raw_routes, route_cps):
         scored_for_metrics: list[ScoredCheckpoint] = []
         checkpoint_payloads: list[dict[str, Any]] = []
 
@@ -120,18 +145,44 @@ def analyze(data: AnalyzeInput) -> dict[str, Any]:
                 metrics_by_id[route["id"]], others
             )
 
-    # Heatmap along the recommended corridor (fallback: first route)
+    # Rebuild heatmap on recommended corridor if different from first
     heat_idx = next((i for i, r in enumerate(built) if r["is_recommended"]), 0)
-    heat_src = raw_routes[heat_idx] if raw_routes else None
+    if heat_idx != 0 and raw_routes:
+        heat_cps = _heatmap_checkpoints(
+            raw_routes[heat_idx].geometry,
+            raw_routes[heat_idx].distance_miles,
+            data.departure_at,
+        )
+        weather.prefetch([(cp.lat, cp.lng) for cp in heat_cps])
 
-    heatmap = _build_heatmap(
-        geometry=heat_src.geometry if heat_src else [],
-        total_miles=heat_src.distance_miles if heat_src else 0,
-        departure_at=data.departure_at,
-        load_weight_lb=data.load_weight_lb,
-        # Also sprinkle points from other routes so the corridor heatmap covers alternatives
-        extra_geometries=[(r.geometry, r.distance_miles) for i, r in enumerate(raw_routes) if i != heat_idx],
-    )
+    heatmap = {
+        "hours": HEATMAP_HOURS,
+        "start": data.departure_at.isoformat(),
+        "points": [
+            {
+                "lng": round(cp.lng, 6),
+                "lat": round(cp.lat, 6),
+                "mile": cp.mile,
+                "hours": [
+                    {
+                        "hour_offset": h["hour_offset"],
+                        "score": h["score"],
+                        "risk": h["risk"],
+                        "time": h["time"],
+                    }
+                    for h in weather.hourly_risk_series(
+                        cp.lat,
+                        cp.lng,
+                        start=data.departure_at,
+                        hours=HEATMAP_HOURS,
+                        load_weight_lb=data.load_weight_lb,
+                        assess_fn=assess_risk,
+                    )
+                ],
+            }
+            for cp in heat_cps
+        ],
+    }
 
     return {
         "origin": {"label": origin.label, "lng": origin.lng, "lat": origin.lat},
@@ -155,72 +206,22 @@ def _resolve(label: str, coords: tuple[float, float] | None) -> Place:
     return geo.geocode(label)
 
 
-def _build_heatmap(
-    *,
+def _heatmap_checkpoints(
     geometry: list[list[float]],
     total_miles: float,
     departure_at: datetime,
-    load_weight_lb: float,
-    extra_geometries: list[tuple[list[list[float]], float]] | None = None,
-) -> dict[str, Any]:
-    """Corridor points with a 48-hour risk series each (slider hour_offset 0..47)."""
+) -> list[Checkpoint]:
     if not geometry or total_miles <= 0:
-        return {"hours": HEATMAP_HOURS, "points": []}
-
-    samples: list[tuple[float, float, float]] = []  # lng, lat, mile
-
-    def _collect(geom: list[list[float]], miles: float, interval: float) -> None:
-        cps = sample_checkpoints(
-            geom,
-            total_miles=miles,
-            duration_minutes=0,
-            departure_at=departure_at,
-            interval_miles=interval,
-        )
-        for cp in cps:
-            samples.append((cp.lng, cp.lat, cp.mile))
-
-    interval = min(HEATMAP_POINT_INTERVAL_MILES, max(10, total_miles / 8))
-    _collect(geometry, total_miles, interval)
-    for geom, miles in extra_geometries or []:
-        if miles > 0 and geom:
-            _collect(geom, miles, max(interval, 60))
-
-    # Deduplicate nearby samples (~0.15°)
-    unique: list[tuple[float, float, float]] = []
-    for lng, lat, mile in samples:
-        if any(abs(lng - u[0]) < 0.15 and abs(lat - u[1]) < 0.15 for u in unique):
-            continue
-        unique.append((lng, lat, mile))
-
-    points: list[dict[str, Any]] = []
-    for lng, lat, mile in unique:
-        series = weather.hourly_risk_series(
-            lat,
-            lng,
-            start=departure_at,
-            hours=HEATMAP_HOURS,
-            load_weight_lb=load_weight_lb,
-            assess_fn=assess_risk,
-        )
-        points.append(
-            {
-                "lng": round(lng, 6),
-                "lat": round(lat, 6),
-                "mile": mile,
-                "hours": [
-                    {
-                        "hour_offset": h["hour_offset"],
-                        "score": h["score"],
-                        "risk": h["risk"],
-                        "time": h["time"],
-                    }
-                    for h in series
-                ],
-            }
-        )
-
-    return {"hours": HEATMAP_HOURS, "start": departure_at.isoformat(), "points": points}
+        return []
+    interval = max(HEATMAP_POINT_INTERVAL_MILES, total_miles / max(1, HEATMAP_MAX_POINTS - 1))
+    cps = sample_checkpoints(
+        geometry,
+        total_miles=total_miles,
+        duration_minutes=0,
+        departure_at=departure_at,
+        interval_miles=interval,
+    )
+    return cps[:HEATMAP_MAX_POINTS]
 
 
 __all__ = ["AnalyzeInput", "analyze", "RoutingError", "WeatherError"]

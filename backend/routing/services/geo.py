@@ -85,6 +85,8 @@ def suggest_places(query: str, limit: int = 5) -> list[dict[str, Any]]:
 
 def directions(origin: Place, destination: Place) -> list[RawRoute]:
     """Return up to 3 real driving routes from OSRM."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     collected: list[RawRoute] = []
 
     for raw in _osrm_route([origin, destination], alternatives=True):
@@ -92,19 +94,26 @@ def directions(origin: Place, destination: Place) -> list[RawRoute]:
         if len(collected) >= TARGET_ROUTES:
             break
 
+    # Parallel via-point attempts if we still need more alternatives
     if len(collected) < TARGET_ROUTES:
-        for via in _offset_vias(origin, destination):
-            for raw in _osrm_route([origin, via, destination], alternatives=False):
-                _add_unique(collected, raw)
+        vias = _offset_vias(origin, destination)[:4]
+
+        def _via_job(via: Place) -> list[RawRoute]:
+            return _osrm_route([origin, via, destination], alternatives=False)
+
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            futures = [pool.submit(_via_job, v) for v in vias]
+            for fut in as_completed(futures):
+                for raw in fut.result():
+                    _add_unique(collected, raw)
+                    if len(collected) >= TARGET_ROUTES:
+                        break
                 if len(collected) >= TARGET_ROUTES:
                     break
-            if len(collected) >= TARGET_ROUTES:
-                break
 
     if not collected:
         raise RoutingError("No routes found between origin and destination")
 
-    # Stable ids / labels after final set
     labels = ["Primary", "Alternative A", "Alternative B"]
     out: list[RawRoute] = []
     for i, r in enumerate(collected[:TARGET_ROUTES]):
@@ -124,7 +133,8 @@ def _osrm_route(points: list[Place], *, alternatives: bool) -> list[RawRoute]:
     coords = ";".join(f"{p.lng},{p.lat}" for p in points)
     url = f"{OSRM_BASE}/route/v1/driving/{coords}"
     params: dict[str, Any] = {
-        "overview": "full",
+        # simplified is enough for map display and much faster over the wire
+        "overview": "simplified",
         "geometries": "geojson",
         "steps": "false",
     }
