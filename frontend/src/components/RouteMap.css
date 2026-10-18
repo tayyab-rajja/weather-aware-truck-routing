@@ -1,8 +1,9 @@
 .route-map {
+  position: relative;
   position: absolute;
   inset: 0;
   overflow: hidden;
-  background: #dfe8ef;
+  background: #0a0e14;
 }
 
 .route-map__canvas {
@@ -12,9 +13,9 @@
   height: 100%;
 }
 
-/* RoadWatch pattern: force GL canvas to fill — never transform this node */
-.route-map__canvas .maplibregl-map,
-.route-map__canvas .maplibregl-canvas {
+/* RoadWatch: never transform the GL canvas parent */
+.route-map__canvas .mapboxgl-map,
+.route-map__canvas .mapboxgl-canvas {
   width: 100% !important;
   height: 100% !important;
 }
@@ -28,17 +29,27 @@
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  background: rgba(223, 232, 239, 0.72);
-  color: #1c1917;
+  background: rgba(10, 14, 20, 0.85);
+  color: #e8eef5;
   font-size: 0.9rem;
   pointer-events: none;
+}
+
+.route-map__overlay--error {
+  pointer-events: auto;
+  text-align: center;
+  padding: 1.5rem;
+}
+
+.route-map__overlay--error strong {
+  color: #f87171;
 }
 
 .route-map__spinner {
   width: 22px;
   height: 22px;
-  border: 2px solid #c4cdd5;
-  border-top-color: #0f766e;
+  border: 2px solid #334155;
+  border-top-color: #f4a338;
   border-radius: 50%;
   animation: rm-spin 0.7s linear infinite;
 }
@@ -50,19 +61,21 @@
 }
 
 .map-cp {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: var(--cp-color, #2a9d8f);
   border: 2px solid #fff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cp-color) 35%, transparent),
+    0 2px 6px rgba(0, 0, 0, 0.45);
   cursor: pointer;
 }
 
 .map-cp--dim {
   width: 9px;
   height: 9px;
-  opacity: 0.55;
+  opacity: 0.45;
+  box-shadow: none;
 }
 
 .map-popup {
@@ -72,22 +85,22 @@
   min-width: 160px;
   font-size: 13px;
   line-height: 1.35;
+  color: #0a0e14;
 }
 
 .map-popup strong {
   font-size: 12px;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #0f766e;
+  letter-spacing: 0.05em;
+  color: #c2410c;
 }
 
 .map-popup__meta {
-  color: #57534e;
+  color: #5a6675;
   font-size: 11.5px;
 }
 
-.maplibregl-popup-content {
+.mapboxgl-popup-content {
   border-radius: 10px;
   padding: 10px 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
 }

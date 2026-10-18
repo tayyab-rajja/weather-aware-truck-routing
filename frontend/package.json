@@ -11,11 +11,12 @@
   },
   "dependencies": {
     "gsap": "^3.15.0",
-    "maplibre-gl": "^6.14.0",
+    "mapbox-gl": "^3.33.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
+    "@types/mapbox-gl": "^3.4.1",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
