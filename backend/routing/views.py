@@ -9,7 +9,7 @@ from routing.services.weather import WeatherError
 
 
 class AnalyzeView(APIView):
-    """POST /api/analyze/ — full weather-aware route analysis."""
+    """POST /api/analyze/ — weather-aware route analysis."""
 
     def post(self, request):
         serializer = AnalyzeInputSerializer(data=request.data)
@@ -40,12 +40,9 @@ class AnalyzeView(APIView):
 
 
 class GeocodeSuggestView(APIView):
-    """GET /api/geocode/?q= — autocomplete helper for the form."""
+    """GET /api/geocode/?q= — place autocomplete for the form."""
 
     def get(self, request):
         q = request.query_params.get("q", "")
-        try:
-            results = suggest_places(q)
-        except RoutingError as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        results = suggest_places(q)
         return Response({"results": results})

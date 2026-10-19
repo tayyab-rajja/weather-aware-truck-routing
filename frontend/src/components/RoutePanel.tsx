@@ -64,6 +64,9 @@ function RouteCard({
           <span>{fmtDuration(route.duration_minutes)}</span>
           <span>Severe {route.metrics.severe_miles.toFixed(0)} mi</span>
           <span>High {route.metrics.high_miles.toFixed(0)} mi</span>
+          {route.metrics.no_travel_miles > 0 && (
+            <span>No travel {route.metrics.no_travel_miles.toFixed(0)} mi</span>
+          )}
           <span>Avg risk {route.metrics.avg_risk.toFixed(2)}</span>
         </div>
         {route.is_recommended && route.recommendation_reason && (

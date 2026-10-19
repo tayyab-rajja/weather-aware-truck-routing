@@ -1,8 +1,8 @@
 """
 Orchestrates: geocode → directions → sample → weather → risk → metrics → recommend → heatmap.
 
-Speed strategy: sample all points first, prefetch weather for unique grid cells
-in one/few Open-Meteo calls, then score everything from cache.
+Prefetch weather for unique grid cells once, then score routes from cache.
+Heatmap is built only along the recommended corridor.
 """
 from __future__ import annotations
 
@@ -18,6 +18,10 @@ from routing.services.risk import assess_risk
 from routing.services.sampling import Checkpoint, sample_checkpoints
 from routing.services.weather import WeatherError
 
+HEATMAP_HOURS = 48
+HEATMAP_POINT_INTERVAL_MILES = 40
+HEATMAP_MAX_POINTS = 14
+
 
 @dataclass
 class AnalyzeInput:
@@ -30,45 +34,27 @@ class AnalyzeInput:
     destination_coords: tuple[float, float] | None = None
 
 
-HEATMAP_HOURS = 48
-# Dense enough for a clear corridor glow; capped so analyze stays fast
-HEATMAP_POINT_INTERVAL_MILES = 40
-HEATMAP_MAX_POINTS = 14
-
-
 def analyze(data: AnalyzeInput) -> dict[str, Any]:
     origin = _resolve(data.origin, data.origin_coords)
     destination = _resolve(data.destination, data.destination_coords)
     raw_routes = geo.directions(origin, destination)
 
-    # 1) Sample checkpoints for every route (no network)
-    route_cps: list[list[Checkpoint]] = []
-    for raw in raw_routes:
-        route_cps.append(
-            sample_checkpoints(
-                raw.geometry,
-                total_miles=raw.distance_miles,
-                duration_minutes=raw.duration_minutes,
-                departure_at=data.departure_at,
-                interval_miles=float(data.sample_interval_miles),
-            )
+    route_cps = [
+        sample_checkpoints(
+            raw.geometry,
+            total_miles=raw.distance_miles,
+            duration_minutes=raw.duration_minutes,
+            departure_at=data.departure_at,
+            interval_miles=float(data.sample_interval_miles),
         )
+        for raw in raw_routes
+    ]
 
-    # 2) Heatmap sample points along primary corridor only (cheaper)
-    heat_geom = raw_routes[0].geometry if raw_routes else []
-    heat_miles = raw_routes[0].distance_miles if raw_routes else 0.0
-    heat_cps = _heatmap_checkpoints(heat_geom, heat_miles, data.departure_at)
-
-    # 3) Prefetch weather for all unique cells in parallel/batch
-    locs: list[tuple[float, float]] = []
-    for cps in route_cps:
-        for cp in cps:
-            locs.append((cp.lat, cp.lng))
-    for cp in heat_cps:
-        locs.append((cp.lat, cp.lng))
+    locs: list[tuple[float, float]] = [
+        (cp.lat, cp.lng) for cps in route_cps for cp in cps
+    ]
     weather.prefetch(locs)
 
-    # 4) Score routes from warm cache
     built: list[dict[str, Any]] = []
     metrics_pairs: list[tuple[str, Any]] = []
 
@@ -145,15 +131,13 @@ def analyze(data: AnalyzeInput) -> dict[str, Any]:
                 metrics_by_id[route["id"]], others
             )
 
-    # Rebuild heatmap on recommended corridor if different from first
     heat_idx = next((i for i, r in enumerate(built) if r["is_recommended"]), 0)
-    if heat_idx != 0 and raw_routes:
-        heat_cps = _heatmap_checkpoints(
-            raw_routes[heat_idx].geometry,
-            raw_routes[heat_idx].distance_miles,
-            data.departure_at,
-        )
-        weather.prefetch([(cp.lat, cp.lng) for cp in heat_cps])
+    heat_cps = _heatmap_checkpoints(
+        raw_routes[heat_idx].geometry if raw_routes else [],
+        raw_routes[heat_idx].distance_miles if raw_routes else 0.0,
+        data.departure_at,
+    )
+    weather.prefetch([(cp.lat, cp.lng) for cp in heat_cps])
 
     heatmap = {
         "hours": HEATMAP_HOURS,
@@ -169,6 +153,7 @@ def analyze(data: AnalyzeInput) -> dict[str, Any]:
                         "score": h["score"],
                         "risk": h["risk"],
                         "time": h["time"],
+                        "wind_mph": h["wind_mph"],
                     }
                     for h in weather.hourly_risk_series(
                         cp.lat,

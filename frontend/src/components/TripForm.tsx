@@ -22,7 +22,6 @@ export function TripForm({ loading, onSubmit }: Props) {
   const [originCoords, setOriginCoords] = useState<[number, number] | undefined>();
   const [destCoords, setDestCoords] = useState<[number, number] | undefined>();
   const [departure, setDeparture] = useState(defaultDeparture);
-  // 42,000 lb → load override: wind 35–44 mph escalates to Severe (Loom demo)
   const [weight, setWeight] = useState(42000);
   const [interval, setInterval] = useState<10 | 25 | 50>(25);
 
@@ -44,7 +43,6 @@ export function TripForm({ loading, onSubmit }: Props) {
       <h1>Weather-Aware Truck Routing</h1>
       <p className="lede">
         Compare up to three routes by weather risk, load weight, and travel time.
-        Demo defaults use a 42,000 lb load so wind load-overrides are easy to show.
       </p>
 
       <LocationInput

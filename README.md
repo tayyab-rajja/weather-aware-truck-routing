@@ -29,8 +29,6 @@ React + Django app that helps a truck driver choose the **safest route** based o
 | Weather | Open-Meteo | Free, no key |
 | Host | Vercel Hobby | Free tier |
 
-Optional: set `VITE_MAPBOX_TOKEN` for Mapbox vector styles; otherwise the free Esri rasters are used.
-
 ## Quick start
 
 ### Backend

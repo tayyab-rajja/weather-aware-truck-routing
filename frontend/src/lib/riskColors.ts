@@ -15,11 +15,3 @@ export const RISK_LABELS: Record<RiskLevel, string> = {
   severe: "Severe",
   no_travel: "No Travel",
 };
-
-export function scoreToColor(score: number): string {
-  if (score <= 1) return RISK_COLORS.low;
-  if (score <= 2) return RISK_COLORS.moderate;
-  if (score <= 3) return RISK_COLORS.high;
-  if (score <= 4) return RISK_COLORS.severe;
-  return RISK_COLORS.no_travel;
-}

@@ -4,7 +4,7 @@ import { HeatmapSlider } from "./components/HeatmapSlider";
 import { RouteMap } from "./components/RouteMap";
 import { RoutePanel } from "./components/RoutePanel";
 import { TripForm } from "./components/TripForm";
-import type { AnalyzeRequest, AnalyzeResponse } from "./types";
+import type { AnalyzeRequest, AnalyzeResponse, RiskLevel } from "./types";
 import { RISK_COLORS, RISK_LABELS } from "./lib/riskColors";
 import "./App.css";
 
@@ -48,6 +48,7 @@ export default function App() {
       (p) => p.hours.find((h) => h.hour_offset === forecastHour) || p.hours[0],
     );
     if (!slots.length) return null;
+
     const avgScore = slots.reduce((s, h) => s + (h?.score ?? 1), 0) / slots.length;
     const counts: Record<string, number> = {};
     for (const h of slots) {
@@ -55,13 +56,14 @@ export default function App() {
       counts[r] = (counts[r] || 0) + 1;
     }
     const dominantRisk = (Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ||
-      "low") as import("./types").RiskLevel;
-    const mid = slots[Math.floor(slots.length / 2)];
-    // wind isn't on heatmap hours — approximate from selected route checkpoint if needed
+      "low") as RiskLevel;
+
+    const winds = slots
+      .map((h) => h?.wind_mph)
+      .filter((w): w is number => typeof w === "number");
     const sampleWind =
-      data.routes[0]?.checkpoints[Math.floor((data.routes[0].checkpoints.length || 1) / 2)]
-        ?.weather.wind_mph ?? 0;
-    void mid;
+      winds.length > 0 ? winds.reduce((a, b) => a + b, 0) / winds.length : null;
+
     return { avgScore, dominantRisk, sampleWind };
   }, [data, forecastHour]);
 
@@ -89,7 +91,6 @@ export default function App() {
       </aside>
 
       <main className="main">
-        {/* Map always mounts so basemap is visible from the start */}
         <RouteMap data={data} selectedId={selectedId} forecastHour={forecastHour} />
         {data && (
           <HeatmapSlider

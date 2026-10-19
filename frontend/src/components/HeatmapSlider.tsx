@@ -5,16 +5,17 @@ interface Props {
   hour: number;
   maxHours: number;
   label: string;
-  /** Corridor summary for the selected forecast hour */
   summary?: {
     avgScore: number;
     dominantRisk: RiskLevel;
-    sampleWind: number;
+    sampleWind: number | null;
   } | null;
   onChange: (hour: number) => void;
 }
 
 export function HeatmapSlider({ hour, maxHours, label, summary, onChange }: Props) {
+  const endHour = Math.max(0, maxHours - 1);
+
   return (
     <div className="heatmap-slider">
       <div className="heatmap-slider-head">
@@ -24,20 +25,19 @@ export function HeatmapSlider({ hour, maxHours, label, summary, onChange }: Prop
         </span>
       </div>
       <p className="heatmap-slider__hint">
-        Scrub to preview corridor weather risk over the next 2 days — map glow and dots update with
-        each hour.
+        Scrub to preview corridor weather risk — map glow and dots update each hour.
       </p>
       <input
         type="range"
         min={0}
-        max={Math.max(0, maxHours - 1)}
+        max={endHour}
         value={hour}
         onChange={(e) => onChange(Number(e.target.value))}
         aria-label="Forecast hour"
       />
       <div className="slider-ends">
         <span>Now</span>
-        <span>+47h</span>
+        <span>+{endHour}h</span>
       </div>
       {summary && (
         <div className="forecast-chip">
@@ -50,8 +50,10 @@ export function HeatmapSlider({ hour, maxHours, label, summary, onChange }: Prop
               Corridor risk at +{hour}h: {RISK_LABELS[summary.dominantRisk]}
             </strong>
             <div>
-              Avg score {summary.avgScore.toFixed(2)} · sample wind {summary.sampleWind.toFixed(0)}{" "}
-              mph
+              Avg score {summary.avgScore.toFixed(2)}
+              {summary.sampleWind != null
+                ? ` · corridor wind ${summary.sampleWind.toFixed(0)} mph`
+                : ""}
             </div>
           </div>
         </div>

@@ -1,6 +1,6 @@
 /**
- * Street map (default) + optional satellite, multi-color routes, truck scrubber.
- * Patterns from RoadWatch-ELD (mapbox-gl, GSAP draw-on, ResizeObserver/nudge).
+ * Street map (default) + satellite toggle, multi-color routes, path scrubber.
+ * Uses Mapbox GL JS with free Esri raster tiles (no API key).
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
@@ -10,8 +10,6 @@ import type { AnalyzeResponse, Checkpoint, RiskLevel, RouteResult } from "../typ
 import { RISK_COLORS, RISK_LABELS } from "../lib/riskColors";
 import { buildRouteIndex, pointAtFraction, sliceByFraction, type LngLat } from "../lib/routeGeo";
 import "./RouteMap.css";
-
-const TOKEN = (import.meta.env.VITE_MAPBOX_TOKEN as string | undefined)?.trim() || "";
 
 type BasemapMode = "streets" | "satellite";
 
@@ -86,18 +84,10 @@ export function RouteMap({ data, selectedId, forecastHour }: Props) {
   const truckRef = useRef<mapboxgl.Marker | null>(null);
   const tweensRef = useRef<gsap.core.Tween[]>([]);
   const drawnTripRef = useRef("");
-  const dataRef = useRef(data);
-  const selectedIdRef = useRef(selectedId);
-  const forecastHourRef = useRef(forecastHour);
-  const appliedBasemapRef = useRef<BasemapMode | null>(null);
   const [phase, setPhase] = useState<"loading" | "ready" | "error">("loading");
   const [errorMsg, setErrorMsg] = useState("");
-  const [progress, setProgress] = useState(0); // 0..1 along selected route
+  const [progress, setProgress] = useState(0);
   const [basemap, setBasemap] = useState<BasemapMode>("streets");
-
-  dataRef.current = data;
-  selectedIdRef.current = selectedId;
-  forecastHourRef.current = forecastHour;
 
   const selectedRoute = useMemo(() => {
     if (!data?.routes.length) return null;
@@ -118,10 +108,10 @@ export function RouteMap({ data, selectedId, forecastHour }: Props) {
     return nearestCheckpoint(selectedRoute.checkpoints, progress);
   }, [selectedRoute, routeIndex, progress]);
 
-  // Always use free Esri rasters (reliable, no key). Optional Mapbox token is unused for basemap.
   useEffect(() => {
     if (!containerRef.current) return;
-    mapboxgl.accessToken = TOKEN || "pk.local-free-basemap";
+    // Mapbox GL requires a token string even for custom raster styles
+    mapboxgl.accessToken = "pk.local-free-basemap";
 
     let map: mapboxgl.Map;
     try {
@@ -146,20 +136,15 @@ export function RouteMap({ data, selectedId, forecastHour }: Props) {
       readyRef.current = true;
       setPhase("ready");
       drawnTripRef.current = "";
-      applyFreeBasemap(map, basemap);
-      appliedBasemapRef.current = basemap;
+      applyFreeBasemap(map, "streets");
       nudge(map);
     };
 
     map.on("load", markReady);
-    map.on("error", () => {
-      // Style/tile errors should not leave a permanent spinner
-      markReady();
-    });
+    map.on("error", markReady);
 
     const observer = new ResizeObserver(() => map.resize());
     observer.observe(containerRef.current);
-    // Fail-open quickly so UI never sticks on "Loading map…"
     const safety = window.setTimeout(markReady, 1200);
 
     return () => {
@@ -173,15 +158,12 @@ export function RouteMap({ data, selectedId, forecastHour }: Props) {
       map.remove();
       mapRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Streets ↔ Satellite via layer visibility (no style reload)
   useEffect(() => {
     const map = mapRef.current;
     if (!map || phase !== "ready") return;
     applyFreeBasemap(map, basemap);
-    appliedBasemapRef.current = basemap;
   }, [basemap, phase]);
 
   // Reset scrubber when selection / trip changes
@@ -250,7 +232,7 @@ export function RouteMap({ data, selectedId, forecastHour }: Props) {
     if (!truckRef.current) {
       const el = document.createElement("div");
       el.className = "map-truck";
-      el.textContent = "🚛";
+      el.setAttribute("aria-hidden", "true");
       truckRef.current = new mapboxgl.Marker({ element: el, anchor: "center" })
         .setLngLat(lngLat)
         .addTo(map);
@@ -450,7 +432,7 @@ function ensureExtraLayers(map: mapboxgl.Map) {
 }
 
 function clearRouteLayers(map: mapboxgl.Map) {
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 3; i++) {
     const id = `route-${i}`;
     if (map.getLayer(`${id}-casing`)) map.removeLayer(`${id}-casing`);
     if (map.getLayer(`${id}-line`)) map.removeLayer(`${id}-line`);

@@ -1,7 +1,7 @@
 """
 Weather and load risk classification.
 
-Levels (worst wins among wind/rain/snow, then load overrides apply):
+Levels (worst of wind / rain / snow, then load overrides):
   low | moderate | high | severe | no_travel
 """
 from __future__ import annotations
@@ -18,8 +18,6 @@ RISK_SCORE: dict[RiskLevel, int] = {
     "severe": 4,
     "no_travel": 5,
 }
-
-_LEVEL_RANK = RISK_SCORE  # higher = worse
 
 
 def classify_wind(mph: float) -> RiskLevel:
@@ -59,37 +57,31 @@ def classify_snow(inches_per_hour: float) -> RiskLevel:
 
 
 def _worse(a: RiskLevel, b: RiskLevel) -> RiskLevel:
-    return a if _LEVEL_RANK[a] >= _LEVEL_RANK[b] else b
+    return a if RISK_SCORE[a] >= RISK_SCORE[b] else b
 
 
-def apply_load_overrides(wind_mph: float, load_weight_lb: float, current: RiskLevel) -> tuple[RiskLevel, list[str]]:
+def apply_load_overrides(
+    wind_mph: float, load_weight_lb: float, current: RiskLevel
+) -> tuple[RiskLevel, list[str]]:
     """
     Load rules:
       - wind >= 55 mph → No Travel (any load)
       - wind 45–54 mph and weight > 30,000 lb → No Travel
       - wind 35–44 mph and weight > 40,000 lb → Severe
     """
-    reasons: list[str] = []
-    level = current
-
     if wind_mph >= 55:
-        level = "no_travel"
-        reasons.append("wind ≥55 mph → no travel (any load)")
-        return level, reasons
+        return "no_travel", ["wind ≥55 mph → no travel (any load)"]
 
     if 45 <= wind_mph < 55 and load_weight_lb > 30_000:
-        level = "no_travel"
-        reasons.append("wind 45–54 mph + load >30,000 lb → no travel")
-        return level, reasons
+        return "no_travel", ["wind 45–54 mph + load >30,000 lb → no travel"]
 
     if 35 <= wind_mph < 45 and load_weight_lb > 40_000:
-        # Only escalate; never downgrade a worse weather level.
-        if _LEVEL_RANK[level] < _LEVEL_RANK["severe"]:
-            level = "severe"
-        reasons.append("wind 35–44 mph + load >40,000 lb → severe")
-        return level, reasons
+        # Escalate only; never downgrade a worse weather level.
+        if RISK_SCORE[current] < RISK_SCORE["severe"]:
+            return "severe", ["wind 35–44 mph + load >40,000 lb → severe"]
+        return current, ["wind 35–44 mph + load >40,000 lb → severe"]
 
-    return level, reasons
+    return current, []
 
 
 @dataclass(frozen=True)
@@ -100,6 +92,29 @@ class RiskResult:
     rain_risk: RiskLevel
     snow_risk: RiskLevel
     reasons: list[str]
+
+
+def _weather_reasons(
+    *,
+    wind_mph: float,
+    rain_in_hr: float,
+    snow_in_hr: float,
+    wind_r: RiskLevel,
+    rain_r: RiskLevel,
+    snow_r: RiskLevel,
+    weather: RiskLevel,
+) -> list[str]:
+    """List every factor that ties for the worst weather level."""
+    if weather == "low":
+        return []
+    reasons: list[str] = []
+    if wind_r == weather:
+        reasons.append(f"wind {wind_mph:.1f} mph → {wind_r}")
+    if rain_r == weather:
+        reasons.append(f"rain {rain_in_hr:.3f} in/hr → {rain_r}")
+    if snow_r == weather:
+        reasons.append(f"snow {snow_in_hr:.2f} in/hr → {snow_r}")
+    return reasons
 
 
 def assess_risk(
@@ -114,16 +129,15 @@ def assess_risk(
     snow_r = classify_snow(snow_in_hr)
 
     weather = _worse(_worse(wind_r, rain_r), snow_r)
-    reasons: list[str] = []
-    if weather == wind_r and wind_r != "low":
-        reasons.append(f"wind {wind_mph:.1f} mph → {wind_r}")
-    if weather == rain_r and rain_r != "low" and rain_r == weather:
-        if f"rain" not in " ".join(reasons):
-            reasons.append(f"rain {rain_in_hr:.3f} in/hr → {rain_r}")
-    if snow_r != "low" and _LEVEL_RANK[snow_r] >= _LEVEL_RANK[weather]:
-        reasons.append(f"snow {snow_in_hr:.2f} in/hr → {snow_r}")
-    if not reasons and weather != "low":
-        reasons.append(f"weather risk → {weather}")
+    reasons = _weather_reasons(
+        wind_mph=wind_mph,
+        rain_in_hr=rain_in_hr,
+        snow_in_hr=snow_in_hr,
+        wind_r=wind_r,
+        rain_r=rain_r,
+        snow_r=snow_r,
+        weather=weather,
+    )
 
     final, load_reasons = apply_load_overrides(wind_mph, load_weight_lb, weather)
     reasons.extend(load_reasons)

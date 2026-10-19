@@ -45,6 +45,7 @@ export interface HeatmapHour {
   score: number;
   risk: RiskLevel;
   time: string;
+  wind_mph?: number;
 }
 
 export interface HeatmapPoint {

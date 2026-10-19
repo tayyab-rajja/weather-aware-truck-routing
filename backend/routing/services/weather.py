@@ -48,7 +48,7 @@ def _fetch_one(key: tuple[float, float]) -> tuple[tuple[float, float], dict[str,
     params = {
         "latitude": key[0],
         "longitude": key[1],
-        "hourly": "wind_speed_10m,precipitation,snowfall,temperature_2m",
+        "hourly": "wind_speed_10m,rain,snowfall,temperature_2m",
         "wind_speed_unit": "ms",
         "precipitation_unit": "mm",
         "temperature_unit": "fahrenheit",
@@ -75,7 +75,7 @@ def _fetch_batch(keys: Sequence[tuple[float, float]]) -> None:
     params = {
         "latitude": lats,
         "longitude": lngs,
-        "hourly": "wind_speed_10m,precipitation,snowfall,temperature_2m",
+        "hourly": "wind_speed_10m,rain,snowfall,temperature_2m",
         "wind_speed_unit": "ms",
         "precipitation_unit": "mm",
         "temperature_unit": "fahrenheit",
@@ -149,12 +149,14 @@ def _nearest_index(times: list[str], target: datetime) -> int:
 def _sample_from_hourly(hourly: dict[str, Any], i: int) -> WeatherSample:
     times: list[str] = hourly["time"]
     wind_ms = float(hourly["wind_speed_10m"][i] or 0)
-    precip_mm = float(hourly["precipitation"][i] or 0)
+    # Prefer liquid rain; fall back to precipitation for older cached payloads
+    rain_mm = hourly.get("rain") or hourly.get("precipitation") or [0] * len(times)
+    rain_in = float(rain_mm[i] or 0) * MM_TO_IN
     snow_cm = float(hourly.get("snowfall", [0] * len(times))[i] or 0)
     temp = hourly.get("temperature_2m", [None] * len(times))[i]
     return WeatherSample(
         wind_mph=wind_ms * MS_TO_MPH,
-        rain_in_hr=precip_mm * MM_TO_IN,
+        rain_in_hr=rain_in,
         snow_in_hr=snow_cm / 2.54,
         temperature_f=float(temp) if temp is not None else None,
         observed_at=times[i],

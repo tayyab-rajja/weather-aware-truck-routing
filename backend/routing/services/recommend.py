@@ -34,12 +34,27 @@ def pick_recommended(routes: Sequence[tuple[T, RouteMetrics]]) -> T | None:
 
 
 def why_recommended(metrics: RouteMetrics, others: Sequence[RouteMetrics]) -> str:
-    """Short human-readable reason for the UI."""
+    """Explain which preference criterion beat the alternatives."""
     if not others:
         return "Only available route."
+
+    best_severe = min(o.severe_miles for o in others)
+    if metrics.severe_miles < best_severe:
+        return f"Fewest severe miles ({metrics.severe_miles:.0f} vs {best_severe:.0f})"
+
+    tied = [o for o in others if o.severe_miles == metrics.severe_miles]
+    best_high = min(o.high_miles for o in tied)
+    if metrics.high_miles < best_high:
+        return f"Tied on severe; fewest high miles ({metrics.high_miles:.0f} vs {best_high:.0f})"
+
+    tied = [o for o in tied if o.high_miles == metrics.high_miles]
+    best_avg = min(o.avg_risk for o in tied)
+    if metrics.avg_risk < best_avg:
+        return f"Tied on severe/high; lowest avg risk ({metrics.avg_risk:.2f} vs {best_avg:.2f})"
+
+    tied = [o for o in tied if o.avg_risk == metrics.avg_risk]
+    best_time = min(o.travel_time_minutes for o in tied)
     return (
-        f"Fewest severe miles ({metrics.severe_miles:.0f}), "
-        f"then fewest high ({metrics.high_miles:.0f}), "
-        f"avg risk {metrics.avg_risk:.2f}, "
-        f"{metrics.travel_time_minutes:.0f} min"
+        f"Tied on risk metrics; shortest time "
+        f"({metrics.travel_time_minutes:.0f} vs {best_time:.0f} min)"
     )
