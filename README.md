@@ -2,7 +2,7 @@
 
 React + Django app that helps a truck driver choose the **safest route** based on **weather**, **load weight**, and **travel time**.
 
-> **GitHub:** https://github.com/SheharyarAhmad1991/weather-aware-truck-routing  
+> **GitHub:** https://github.com/tayyab-rajja/weather-aware-truck-routing  
 > **Live app:** https://frontend-kappa-nine-95.vercel.app  
 > **API:** https://backend-flame-ten-24.vercel.app  
 
