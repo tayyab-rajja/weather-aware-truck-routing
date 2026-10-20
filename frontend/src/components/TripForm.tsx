@@ -48,7 +48,7 @@ export function TripForm({ loading, onSubmit }: Props) {
 
       <LocationInput
         id="origin"
-        label="Start"
+        label="Starting Location"
         value={origin}
         onChange={(label, coords) => {
           setOrigin(label);
@@ -57,7 +57,7 @@ export function TripForm({ loading, onSubmit }: Props) {
       />
       <LocationInput
         id="destination"
-        label="End"
+        label="Destination"
         value={destination}
         onChange={(label, coords) => {
           setDestination(label);
