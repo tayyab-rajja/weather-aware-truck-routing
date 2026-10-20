@@ -1,37 +1,37 @@
 # Weather-Aware Truck Routing
 
-React + Django app that helps a truck driver choose the **safest route** based on **weather**, **load weight**, and **travel time**.
+A React + Django tool for drivers who need the **safest practical corridor** when weather, cargo weight, and schedule all matter.
 
-> **GitHub:** https://github.com/tayyab-rajja/weather-aware-truck-routing  
-> **Live app:** https://frontend-kappa-nine-95.vercel.app  
-> **API:** https://backend-flame-ten-24.vercel.app  
+> **Repository:** https://github.com/tayyab-rajja/weather-aware-truck-routing  
+> **Web app:** https://frontend-kappa-nine-95.vercel.app  
+> **Backend API:** https://backend-flame-ten-24.vercel.app  
 
-**100% free stack** — no paid APIs or paid map tokens required.
+Runs on a free stack (no paid map or weather keys required).
 
-## What it does
+## Capabilities
 
-1. Geocodes origin & destination (**Nominatim** / OpenStreetMap)
-2. Builds **3 driving route options** (**OSRM** — alternatives + via-point corridors when needed)
-3. Samples weather every **10 / 25 / 50 miles** at the truck’s ETA (**Open-Meteo**)
-4. Scores each checkpoint with the assessment **risk + load rules**
-5. Recommends a route: fewest Severe miles → fewest High → lowest avg risk → shortest time
-6. Shows all routes, checkpoints (risk + ETA), summaries, and a **48-hour forecast heatmap slider**
+1. Resolve start and end points (**Nominatim** / OpenStreetMap)
+2. Request up to **three** driving corridors (**OSRM**, with via-point fallbacks when needed)
+3. Pull weather every **10 / 25 / 50 miles** at each checkpoint ETA (**Open-Meteo**)
+4. Apply the brief’s **weather risk bands** and **load overrides**
+5. Rank corridors: fewest Severe miles → fewest High → lowest average risk → shortest time
+6. Render corridors, checkpoints (risk + ETA), summaries, and a **48-hour corridor forecast** slider on the map
 
-## Stack (all free)
+## Technology
 
-| Layer | Tech | Cost |
+| Piece | Choice | Notes |
 | --- | --- | --- |
-| Frontend | Vite, React, TypeScript, Mapbox GL JS | Free |
-| Basemap | Esri World Street Map + World Imagery (no token) | Free |
-| Backend | Django 4 + DRF | Free |
-| Geocode | Nominatim | Free, no key |
-| Routing | OSRM public API | Free, no key |
-| Weather | Open-Meteo | Free, no key |
-| Host | Vercel Hobby | Free tier |
+| UI | Vite, React, TypeScript, Mapbox GL JS | Free |
+| Map tiles | Esri street + satellite rasters | No token |
+| API | Django 4 + DRF | Free |
+| Places | Nominatim | No key |
+| Directions | Public OSRM | No key |
+| Forecast | Open-Meteo | No key |
+| Hosting | Vercel Hobby | Free tier |
 
-## Quick start
+## Local setup
 
-### Backend
+### API server
 
 ```bash
 cd backend
@@ -44,13 +44,13 @@ python manage.py migrate
 python manage.py runserver
 ```
 
-API: `http://localhost:8000` · health: `/healthz/`
+Base URL: `http://localhost:8000` · health check: `/healthz/`
 
 ```bash
 pytest
 ```
 
-### Frontend
+### Web client
 
 ```bash
 cd frontend
@@ -59,9 +59,9 @@ cp .env.example .env   # VITE_API_URL=http://localhost:8000
 npm run dev
 ```
 
-App: `http://localhost:5173`
+Open `http://localhost:5173`
 
-## API
+## HTTP API
 
 ### `POST /api/analyze/`
 
@@ -75,13 +75,13 @@ App: `http://localhost:5173`
 }
 ```
 
-**Response:** `routes[]` (geometry, checkpoints with weather/risk/ETA, metrics), `recommended_route_id`, `heatmap` (48 hourly scores along the corridor).
+Returns scored `routes[]` (geometry, checkpoints with weather/risk/ETA, metrics), `recommended_route_id`, and a 48-hour `heatmap` along the chosen corridor.
 
 ### `GET /api/geocode/?q=`
 
-Free Nominatim autocomplete for the form.
+Nominatim-backed place suggestions for the trip form.
 
-## Risk rules (from assessment)
+## Risk model (assessment brief)
 
 Worst of wind / rain / snow, then load overrides:
 
@@ -99,19 +99,19 @@ Worst of wind / rain / snow, then load overrides:
 - Wind 45–54 mph + load &gt;30,000 lb → No Travel
 - Wind 35–44 mph + load &gt;40,000 lb → Severe
 
-**Recommendation order:** fewest Severe miles → fewest High miles → lowest average risk → shortest travel time.
+**Ranking:** fewest Severe miles → fewest High miles → lowest average risk → shortest travel time.
 
-Segment miles between checkpoints are attributed to the **arrival** checkpoint’s risk. `no_travel` miles count toward severe miles for ranking.
+Miles between checkpoints are charged to the **arrival** checkpoint’s risk. `no_travel` miles also count toward severe miles when ranking.
 
-## Loom
+## Walkthrough
 
-See [LOOM.md](LOOM.md) for a 5–10 minute walkthrough script.
+See [LOOM.md](LOOM.md) for a 5–10 minute recording outline.
 
-## Project layout
+## Layout
 
 ```
 backend/routing/services/   # geo, sampling, weather, risk, metrics, recommend, planner
-frontend/src/components/    # form, map, route panel, heatmap slider
-plan                        # build plan
-fs-assessment-spotter.md    # original brief
+frontend/src/components/    # trip form, map, corridor list, forecast slider
+plan                        # implementation notes
+fs-assessment-spotter.md    # assignment brief
 ```

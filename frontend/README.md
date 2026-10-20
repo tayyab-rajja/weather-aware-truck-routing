@@ -1,6 +1,6 @@
-# Frontend — Weather-Aware Truck Routing
+# Web client — Weather-Aware Truck Routing
 
-Vite + React + TypeScript + Mapbox GL JS with free Esri street/satellite tiles (no map API key).
+Vite + React + TypeScript. Map rendering uses Mapbox GL JS with free Esri street/satellite tiles (no map key).
 
 ```bash
 npm install

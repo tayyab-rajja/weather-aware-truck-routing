@@ -72,15 +72,15 @@ export default function App() {
       <aside className="sidebar">
         <TripForm loading={loading} onSubmit={handleSubmit} />
         {error && <div className="error">{error}</div>}
-        {loading && <p className="status-line">Sampling weather along alternate routes…</p>}
+        {loading && <p className="status-line">Pulling forecasts along each corridor…</p>}
         {!data && !loading && !error && (
-          <p className="status-line">Submit a trip to compare up to three weather-scored routes.</p>
+          <p className="status-line">Enter a trip above to score up to three corridors.</p>
         )}
         {data && (
           <RoutePanel data={data} selectedId={selectedId} onSelect={setSelectedId} />
         )}
         <div className="legend">
-          <span>Risk</span>
+          <span>Risk key</span>
           {(Object.keys(RISK_LABELS) as (keyof typeof RISK_LABELS)[]).map((k) => (
             <span key={k} className="legend-item">
               <i style={{ background: RISK_COLORS[k] }} />

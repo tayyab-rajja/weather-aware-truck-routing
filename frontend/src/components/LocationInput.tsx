@@ -37,7 +37,7 @@ export function LocationInput({ id, label, value, onChange }: Props) {
         id={id}
         value={value}
         autoComplete="off"
-        placeholder="City, State"
+        placeholder="City or place"
         onChange={(e) => handleType(e.target.value)}
         onBlur={() => window.setTimeout(() => setOpen(false), 150)}
         onFocus={() => suggestions.length && setOpen(true)}

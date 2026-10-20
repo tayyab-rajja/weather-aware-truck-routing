@@ -42,12 +42,13 @@ export function TripForm({ loading, onSubmit }: Props) {
     <form className="trip-form" onSubmit={handleSubmit}>
       <h1>Weather-Aware Truck Routing</h1>
       <p className="lede">
-        Compare up to three routes by weather risk, load weight, and travel time.
+        Plan a haul with up to three alternatives scored on weather, cargo weight, and drive
+        time.
       </p>
 
       <LocationInput
         id="origin"
-        label="Origin"
+        label="Start"
         value={origin}
         onChange={(label, coords) => {
           setOrigin(label);
@@ -56,7 +57,7 @@ export function TripForm({ loading, onSubmit }: Props) {
       />
       <LocationInput
         id="destination"
-        label="Destination"
+        label="End"
         value={destination}
         onChange={(label, coords) => {
           setDestination(label);
@@ -67,7 +68,7 @@ export function TripForm({ loading, onSubmit }: Props) {
       <DeparturePicker value={departure} onChange={setDeparture} />
 
       <label className="field" htmlFor="weight">
-        <span>Load weight (lb)</span>
+        <span>Cargo weight (lb)</span>
         <input
           id="weight"
           type="number"
@@ -80,7 +81,7 @@ export function TripForm({ loading, onSubmit }: Props) {
       </label>
 
       <fieldset className="interval">
-        <legend>Sample weather every</legend>
+        <legend>Weather check every</legend>
         {([10, 25, 50] as const).map((n) => (
           <label key={n}>
             <input
@@ -95,7 +96,7 @@ export function TripForm({ loading, onSubmit }: Props) {
       </fieldset>
 
       <button type="submit" className="primary" disabled={loading}>
-        {loading ? "Analyzing routes…" : "Find safest routes"}
+        {loading ? "Scoring corridors…" : "Compare routes"}
       </button>
     </form>
   );

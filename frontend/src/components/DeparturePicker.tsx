@@ -86,7 +86,7 @@ export function DeparturePicker({ value, onChange }: Props) {
 
   return (
     <div className="dep-picker field" ref={rootRef}>
-      <span>Departure</span>
+      <span>Leave at</span>
       <button
         type="button"
         className="dep-picker__trigger"

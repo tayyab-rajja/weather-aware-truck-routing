@@ -2,7 +2,7 @@
   position: absolute;
   inset: 0;
   overflow: hidden;
-  background: #0b1220;
+  background: #9aa8b8;
 }
 
 .route-map__canvas {
@@ -27,8 +27,8 @@
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  background: rgba(11, 18, 32, 0.82);
-  color: #e8eef5;
+  background: rgba(20, 32, 51, 0.55);
+  color: #f8fafc;
   font-size: 0.9rem;
   pointer-events: none;
 }
@@ -45,11 +45,11 @@
   right: 3.5rem;
   z-index: 30;
   display: inline-flex;
-  padding: 3px;
-  background: #ffffff;
-  border: 1px solid rgba(15, 23, 42, 0.18);
-  border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.22);
+  padding: 2px;
+  background: #f7f9fc;
+  border: 1px solid #c5d0dc;
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(20, 32, 51, 0.12);
   pointer-events: auto;
 }
 
@@ -57,32 +57,33 @@
   appearance: none;
   border: 0;
   background: transparent;
-  color: #475569;
+  color: #5a6b7d;
   font: inherit;
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  padding: 0.4rem 0.7rem;
-  border-radius: 7px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 0.38rem 0.65rem;
+  border-radius: 4px;
   cursor: pointer;
   line-height: 1;
 }
 
 .basemap-toggle button:hover {
-  color: #0f172a;
-  background: rgba(15, 23, 42, 0.05);
+  color: #142033;
+  background: #e8eef4;
 }
 
 .basemap-toggle button.active {
   color: #fff;
-  background: #1d4ed8;
+  background: #1e4d8c;
 }
 
 .route-map__spinner {
   width: 22px;
   height: 22px;
-  border: 2px solid #334155;
-  border-top-color: #1d4ed8;
+  border: 2px solid #64748b;
+  border-top-color: #f8fafc;
   border-radius: 50%;
   animation: rm-spin 0.7s linear infinite;
 }
@@ -94,31 +95,30 @@
 }
 
 .map-truck {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: #1d4ed8;
-  border: 3px solid #fff;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.45);
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
+  background: #1e4d8c;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.4);
   pointer-events: none;
   z-index: 5;
 }
 
 .map-cp {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
   background: var(--cp-color, #2a9d8f);
   border: 2px solid #fff;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cp-color) 40%, transparent),
-    0 2px 6px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
   cursor: pointer;
 }
 
 .map-cp--dim {
-  width: 8px;
-  height: 8px;
-  opacity: 0.4;
+  width: 7px;
+  height: 7px;
+  opacity: 0.45;
   box-shadow: none;
 }
 
@@ -128,25 +128,26 @@
   gap: 2px;
   min-width: 160px;
   font-size: 13px;
-  color: #0a0e14;
+  color: #142033;
+  font-family: "Source Sans 3", sans-serif;
 }
 
 .map-popup strong {
-  font-size: 12px;
+  font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #c2410c;
+  letter-spacing: 0.05em;
+  color: #1e4d8c;
 }
 
 .map-popup__meta {
-  color: #5a6675;
+  color: #5a6b7d;
   font-size: 11.5px;
 }
 
 .map-popup__reasons {
   margin: 0.35rem 0 0;
   padding-left: 1.1rem;
-  color: #0f172a;
+  color: #142033;
   font-size: 11.5px;
   line-height: 1.35;
 }
@@ -156,8 +157,9 @@
 }
 
 .mapboxgl-popup-content {
-  border-radius: 10px;
+  border-radius: 6px;
   padding: 10px 12px;
+  border: 1px solid #c5d0dc;
 }
 
 .truck-scrubber {
@@ -167,57 +169,57 @@
   transform: translateX(-50%);
   width: min(460px, calc(100% - 1.5rem));
   z-index: 4;
-  background: rgba(10, 14, 20, 0.88);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 14px;
-  padding: 0.75rem 1rem;
-  color: #e8eef5;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+  background: #f7f9fc;
+  border: 1px solid #c5d0dc;
+  border-radius: 6px;
+  padding: 0.7rem 0.9rem;
+  color: #142033;
+  box-shadow: 0 8px 24px rgba(20, 32, 51, 0.12);
 }
 
 .truck-scrubber__head {
   display: flex;
   justify-content: space-between;
-  font-size: 0.85rem;
-  margin-bottom: 0.35rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin-bottom: 0.3rem;
 }
 
 .truck-scrubber input[type="range"] {
   width: 100%;
-  accent-color: #1d4ed8;
+  accent-color: #1e4d8c;
 }
 
 .truck-scrubber__ends {
   display: flex;
   justify-content: space-between;
-  font-size: 0.72rem;
-  color: #94a3b8;
+  font-size: 0.7rem;
+  color: #5a6b7d;
 }
 
 .weather-chip {
   display: flex;
-  gap: 0.65rem;
+  gap: 0.6rem;
   align-items: flex-start;
-  margin-top: 0.65rem;
-  padding-top: 0.65rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  font-size: 0.8rem;
+  margin-top: 0.55rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid #c5d0dc;
+  font-size: 0.78rem;
   line-height: 1.35;
 }
 
 .weather-chip__dot {
   width: 10px;
   height: 10px;
-  border-radius: 50%;
+  border-radius: 2px;
   margin-top: 4px;
   flex-shrink: 0;
 }
 
 .weather-chip strong {
   display: block;
-  font-size: 0.78rem;
-  margin-bottom: 0.15rem;
+  font-size: 0.76rem;
+  margin-bottom: 0.12rem;
 }
 
 .route-color-legend {
@@ -227,31 +229,31 @@
   z-index: 4;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.55rem 0.85rem;
-  padding: 0.55rem 0.75rem;
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  border-radius: 10px;
-  color: #0f172a;
-  font-size: 0.75rem;
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.1);
+  gap: 0.5rem 0.75rem;
+  padding: 0.5rem 0.7rem;
+  background: #f7f9fc;
+  border: 1px solid #c5d0dc;
+  border-radius: 6px;
+  color: #142033;
+  font-size: 0.72rem;
+  box-shadow: 0 4px 14px rgba(20, 32, 51, 0.1);
 }
 
 .route-color-legend span {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.3rem;
   opacity: 0.75;
 }
 
 .route-color-legend span.active {
   opacity: 1;
-  font-weight: 650;
+  font-weight: 700;
 }
 
 .route-color-legend i {
   width: 12px;
-  height: 4px;
-  border-radius: 99px;
+  height: 3px;
+  border-radius: 1px;
   display: inline-block;
 }

@@ -13,8 +13,8 @@ import "./RouteMap.css";
 
 type BasemapMode = "streets" | "satellite";
 
-/** Distinct, readable route colors (blue / burnt orange / violet) */
-export const ROUTE_PALETTE = ["#1d4ed8", "#c2410c", "#6d28d9"] as const;
+/** Route colors: navy / rust / olive — readable on street + satellite */
+export const ROUTE_PALETTE = ["#1e4d8c", "#9a3412", "#3f6212"] as const;
 
 /** Free Esri street + satellite rasters (no API key); toggle via layer visibility. */
 const FREE_STYLE: mapboxgl.Style = {
@@ -263,14 +263,14 @@ export function RouteMap({ data, selectedId, forecastHour }: Props) {
           className={basemap === "streets" ? "active" : ""}
           onClick={() => setBasemap("streets")}
         >
-          Streets
+          Road
         </button>
         <button
           type="button"
           className={basemap === "satellite" ? "active" : ""}
           onClick={() => setBasemap("satellite")}
         >
-          Satellite
+          Aerial
         </button>
       </div>
 
@@ -290,7 +290,7 @@ export function RouteMap({ data, selectedId, forecastHour }: Props) {
       {data && selectedRoute && (
         <div className="truck-scrubber">
           <div className="truck-scrubber__head">
-            <strong>Drive path</strong>
+            <strong>Trip progress</strong>
             <span>
               {milesDone} / {milesTotal} mi
             </span>
@@ -421,8 +421,7 @@ function ensureExtraLayers(map: mapboxgl.Map) {
       source: "traveled",
       layout: { "line-cap": "round", "line-join": "round" },
       paint: {
-        // Amber reads on both light streets and satellite
-        "line-color": "#f59e0b",
+        "line-color": "#b45309",
         "line-width": 7,
         "line-opacity": 0.95,
         "line-blur": 0.15,

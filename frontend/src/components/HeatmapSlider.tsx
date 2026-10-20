@@ -19,13 +19,13 @@ export function HeatmapSlider({ hour, maxHours, label, summary, onChange }: Prop
   return (
     <div className="heatmap-slider">
       <div className="heatmap-slider-head">
-        <strong>48-hour forecast</strong>
+        <strong>48h corridor outlook</strong>
         <span>
           +{hour}h · {label}
         </span>
       </div>
       <p className="heatmap-slider__hint">
-        Scrub to preview corridor weather risk — map glow and dots update each hour.
+        Drag to step through the next two days; glow and markers refresh each hour.
       </p>
       <input
         type="range"

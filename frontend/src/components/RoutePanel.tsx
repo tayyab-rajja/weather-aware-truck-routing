@@ -17,7 +17,7 @@ function fmtDuration(min: number): string {
 export function RoutePanel({ data, selectedId, onSelect }: Props) {
   return (
     <div className="route-panel">
-      <h2>Routes</h2>
+      <h2>Corridor options</h2>
       <ul>
         {data.routes.map((r, i) => (
           <RouteCard
@@ -57,7 +57,7 @@ function RouteCard({
             <i className="route-swatch" style={{ background: color }} />
             {route.summary || route.id}
           </strong>
-          {route.is_recommended && <span className="badge">Recommended</span>}
+          {route.is_recommended && <span className="badge">Best pick</span>}
         </div>
         <div className="route-stats">
           <span>{route.distance_miles.toFixed(0)} mi</span>
