@@ -11,6 +11,7 @@ Always aims for 3 distinct driving options:
 from __future__ import annotations
 
 import math
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -20,6 +21,14 @@ OSRM_BASE = "https://router.project-osrm.org"
 NOMINATIM = "https://nominatim.openstreetmap.org"
 USER_AGENT = "WeatherAwareTruckRouting/1.0 (open-source assessment; free APIs only)"
 TARGET_ROUTES = 3
+
+_SESSION = requests.Session()
+_SESSION.headers.update({"User-Agent": USER_AGENT})
+
+# Short-lived suggest cache: query → (expires_at, results)
+_SUGGEST_CACHE: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+_SUGGEST_TTL_SEC = 300.0
+_SUGGEST_CACHE_MAX = 128
 
 
 class RoutingError(Exception):
@@ -43,11 +52,10 @@ class RawRoute:
 
 
 def geocode(query: str) -> Place:
-    resp = requests.get(
+    resp = _SESSION.get(
         f"{NOMINATIM}/search",
-        params={"q": query, "format": "json", "limit": 1},
-        headers={"User-Agent": USER_AGENT},
-        timeout=20,
+        params={"q": query, "format": "json", "limit": 1, "addressdetails": 0},
+        timeout=12,
     )
     if resp.status_code != 200:
         raise RoutingError(f"Geocoding failed ({resp.status_code})")
@@ -63,24 +71,48 @@ def geocode(query: str) -> Place:
 
 
 def suggest_places(query: str, limit: int = 5) -> list[dict[str, Any]]:
-    if not query or len(query.strip()) < 2:
+    q = (query or "").strip().lower()
+    if len(q) < 2:
         return []
-    resp = requests.get(
-        f"{NOMINATIM}/search",
-        params={"q": query.strip(), "format": "json", "limit": limit},
-        headers={"User-Agent": USER_AGENT},
-        timeout=15,
-    )
+
+    now = time.monotonic()
+    cached = _SUGGEST_CACHE.get(q)
+    if cached and cached[0] > now:
+        return cached[1][:limit]
+
+    try:
+        resp = _SESSION.get(
+            f"{NOMINATIM}/search",
+            params={
+                "q": query.strip(),
+                "format": "json",
+                "limit": limit,
+                "addressdetails": 0,
+            },
+            timeout=6,
+        )
+    except requests.RequestException:
+        return []
     if resp.status_code != 200:
         return []
-    return [
+
+    out = [
         {
             "label": h.get("display_name") or "",
             "lng": float(h["lon"]),
             "lat": float(h["lat"]),
         }
         for h in (resp.json() or [])
+        if h.get("lon") is not None and h.get("lat") is not None
     ]
+    if len(_SUGGEST_CACHE) >= _SUGGEST_CACHE_MAX:
+        # Drop oldest ~half by expiry
+        for k, _ in sorted(_SUGGEST_CACHE.items(), key=lambda kv: kv[1][0])[
+            : _SUGGEST_CACHE_MAX // 2
+        ]:
+            _SUGGEST_CACHE.pop(k, None)
+    _SUGGEST_CACHE[q] = (now + _SUGGEST_TTL_SEC, out)
+    return out
 
 
 def directions(origin: Place, destination: Place) -> list[RawRoute]:
@@ -142,7 +174,7 @@ def _osrm_route(points: list[Place], *, alternatives: bool) -> list[RawRoute]:
         params["alternatives"] = "true"
 
     try:
-        resp = requests.get(url, params=params, timeout=30)
+        resp = _SESSION.get(url, params=params, timeout=18)
     except requests.RequestException:
         return []
     if resp.status_code != 200:
@@ -166,11 +198,25 @@ def _osrm_route(points: list[Place], *, alternatives: bool) -> list[RawRoute]:
                 id=f"tmp_{i}",
                 distance_miles=meters / 1609.344,
                 duration_minutes=seconds / 60.0,
-                geometry=[[float(c[0]), float(c[1])] for c in coords_list],
+                geometry=_thin_geometry(
+                    [[float(c[0]), float(c[1])] for c in coords_list]
+                ),
                 summary="",
             )
         )
     return out
+
+
+def _thin_geometry(coords: list[list[float]], max_points: int = 180) -> list[list[float]]:
+    """Keep map readable while cutting JSON/transfer cost."""
+    n = len(coords)
+    if n <= max_points:
+        return coords
+    step = max(1, (n - 1) // (max_points - 1))
+    thinned = coords[::step]
+    if thinned[-1] != coords[-1]:
+        thinned.append(coords[-1])
+    return thinned
 
 
 def _add_unique(bucket: list[RawRoute], candidate: RawRoute) -> None:

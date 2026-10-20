@@ -9,45 +9,70 @@ interface Props {
   onChange: (label: string, coords?: [number, number]) => void;
 }
 
+const CACHE = new Map<string, PlaceSuggestion[]>();
+const DEBOUNCE_MS = 120;
+
 export function LocationInput({ id, label, value, onChange }: Props) {
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
   const [open, setOpen] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
   const timer = useRef<number | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const reqId = useRef(0);
 
   useEffect(() => {
     return () => {
       if (timer.current) window.clearTimeout(timer.current);
+      abortRef.current?.abort();
     };
   }, []);
+
+  function applyResults(results: PlaceSuggestion[]) {
+    setSuggestions(results);
+    setOpen(results.length > 0);
+    setHint(results.length === 0 ? "No matching places" : null);
+  }
 
   function handleType(next: string) {
     onChange(next, undefined);
     setHint(null);
     if (timer.current) window.clearTimeout(timer.current);
+    abortRef.current?.abort();
 
-    if (!next.trim()) {
+    const key = next.trim().toLowerCase();
+    if (key.length < 2) {
       setSuggestions([]);
       setOpen(false);
       return;
     }
 
+    const cached = CACHE.get(key);
+    if (cached) {
+      applyResults(cached);
+      return;
+    }
+
     const idNow = ++reqId.current;
     timer.current = window.setTimeout(async () => {
+      const ctrl = new AbortController();
+      abortRef.current = ctrl;
       try {
-        const results = await suggestPlaces(next);
-        if (idNow !== reqId.current) return;
-        setSuggestions(results);
-        setOpen(results.length > 0);
-        setHint(results.length === 0 ? "No matching places" : null);
-      } catch {
-        if (idNow !== reqId.current) return;
+        const results = await suggestPlaces(next, ctrl.signal);
+        if (idNow !== reqId.current || ctrl.signal.aborted) return;
+        CACHE.set(key, results);
+        if (CACHE.size > 80) {
+          const first = CACHE.keys().next().value;
+          if (first) CACHE.delete(first);
+        }
+        applyResults(results);
+      } catch (err) {
+        if (ctrl.signal.aborted || idNow !== reqId.current) return;
         setSuggestions([]);
         setOpen(false);
         setHint("Place search unavailable");
+        void err;
       }
-    }, 280);
+    }, DEBOUNCE_MS);
   }
 
   return (

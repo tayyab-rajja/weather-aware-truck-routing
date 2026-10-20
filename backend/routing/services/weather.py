@@ -16,10 +16,12 @@ import requests
 # Cache keyed by (rounded lat, rounded lng) → full hourly payload
 _CACHE: dict[tuple[float, float], dict[str, Any]] = {}
 
+_SESSION = requests.Session()
+
 MS_TO_MPH = 2.23693629
 MM_TO_IN = 1 / 25.4
-# ~17 miles at mid-latitudes — good enough for corridor weather, far fewer HTTP calls
-_GRID = 0.25
+# ~28 miles at mid-latitudes — fewer Open-Meteo cells, still corridor-accurate
+_GRID = 0.4
 
 
 class WeatherError(Exception):
@@ -43,19 +45,23 @@ def clear_cache() -> None:
     _CACHE.clear()
 
 
+_HOURLY_VARS = "wind_speed_10m,rain,snowfall,temperature_2m"
+
+
 def _fetch_one(key: tuple[float, float]) -> tuple[tuple[float, float], dict[str, Any]]:
     url = "https://api.open-meteo.com/v1/forecast"
     params = {
         "latitude": key[0],
         "longitude": key[1],
-        "hourly": "wind_speed_10m,rain,snowfall,temperature_2m",
+        "hourly": _HOURLY_VARS,
         "wind_speed_unit": "ms",
         "precipitation_unit": "mm",
         "temperature_unit": "fahrenheit",
-        "forecast_days": 7,
+        # 48h slider only needs ~3 days of forecast
+        "forecast_days": 3,
         "timezone": "UTC",
     }
-    resp = requests.get(url, params=params, timeout=12)
+    resp = _SESSION.get(url, params=params, timeout=10)
     if resp.status_code != 200:
         raise WeatherError(f"Open-Meteo failed ({resp.status_code})")
     data = resp.json()
@@ -75,14 +81,14 @@ def _fetch_batch(keys: Sequence[tuple[float, float]]) -> None:
     params = {
         "latitude": lats,
         "longitude": lngs,
-        "hourly": "wind_speed_10m,rain,snowfall,temperature_2m",
+        "hourly": _HOURLY_VARS,
         "wind_speed_unit": "ms",
         "precipitation_unit": "mm",
         "temperature_unit": "fahrenheit",
-        "forecast_days": 7,
+        "forecast_days": 3,
         "timezone": "UTC",
     }
-    resp = requests.get(url, params=params, timeout=20)
+    resp = _SESSION.get(url, params=params, timeout=16)
     if resp.status_code != 200:
         # Fall back to parallel singles
         _fetch_parallel(keys)
@@ -123,10 +129,14 @@ def prefetch(locations: Iterable[tuple[float, float]]) -> None:
     if not missing:
         return
 
-    # Open-Meteo multi-point works well in chunks of ~25–40
-    chunk = 30
-    for i in range(0, len(missing), chunk):
-        _fetch_batch(missing[i : i + chunk])
+    # Larger chunks + parallel chunks when many cells are cold
+    chunk = 40
+    batches = [missing[i : i + chunk] for i in range(0, len(missing), chunk)]
+    if len(batches) == 1:
+        _fetch_batch(batches[0])
+        return
+    with ThreadPoolExecutor(max_workers=min(4, len(batches))) as pool:
+        list(pool.map(_fetch_batch, batches))
 
 
 def _nearest_index(times: list[str], target: datetime) -> int:

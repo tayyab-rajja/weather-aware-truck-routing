@@ -19,8 +19,7 @@ from routing.services.sampling import Checkpoint, sample_checkpoints
 from routing.services.weather import WeatherError
 
 HEATMAP_HOURS = 48
-HEATMAP_POINT_INTERVAL_MILES = 40
-HEATMAP_MAX_POINTS = 14
+HEATMAP_MAX_POINTS = 8
 
 
 @dataclass
@@ -131,13 +130,10 @@ def analyze(data: AnalyzeInput) -> dict[str, Any]:
                 metrics_by_id[route["id"]], others
             )
 
+    # Reuse scored checkpoint locations (already weather-cached) for the 48h glow —
+    # avoids a second Open-Meteo round-trip.
     heat_idx = next((i for i, r in enumerate(built) if r["is_recommended"]), 0)
-    heat_cps = _heatmap_checkpoints(
-        raw_routes[heat_idx].geometry if raw_routes else [],
-        raw_routes[heat_idx].distance_miles if raw_routes else 0.0,
-        data.departure_at,
-    )
-    weather.prefetch([(cp.lat, cp.lng) for cp in heat_cps])
+    heat_cps = _subsample_checkpoints(route_cps[heat_idx], HEATMAP_MAX_POINTS)
 
     heatmap = {
         "hours": HEATMAP_HOURS,
@@ -191,22 +187,16 @@ def _resolve(label: str, coords: tuple[float, float] | None) -> Place:
     return geo.geocode(label)
 
 
-def _heatmap_checkpoints(
-    geometry: list[list[float]],
-    total_miles: float,
-    departure_at: datetime,
-) -> list[Checkpoint]:
-    if not geometry or total_miles <= 0:
+def _subsample_checkpoints(cps: list[Checkpoint], max_points: int) -> list[Checkpoint]:
+    if not cps:
         return []
-    interval = max(HEATMAP_POINT_INTERVAL_MILES, total_miles / max(1, HEATMAP_MAX_POINTS - 1))
-    cps = sample_checkpoints(
-        geometry,
-        total_miles=total_miles,
-        duration_minutes=0,
-        departure_at=departure_at,
-        interval_miles=interval,
-    )
-    return cps[:HEATMAP_MAX_POINTS]
+    if len(cps) <= max_points:
+        return cps
+    if max_points == 1:
+        return [cps[0]]
+    step = (len(cps) - 1) / (max_points - 1)
+    idxs = sorted({round(i * step) for i in range(max_points)})
+    return [cps[i] for i in idxs]
 
 
 __all__ = ["AnalyzeInput", "analyze", "RoutingError", "WeatherError"]

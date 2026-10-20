@@ -72,7 +72,9 @@ export default function App() {
       <aside className="sidebar">
         <TripForm loading={loading} onSubmit={handleSubmit} />
         {error && <div className="error">{error}</div>}
-        {loading && <p className="status-line">Pulling forecasts along each corridor…</p>}
+        {loading && (
+          <p className="status-line">Routing + weather scoring in progress…</p>
+        )}
         {!data && !loading && !error && (
           <p className="status-line">Enter a trip above to score up to three corridors.</p>
         )}

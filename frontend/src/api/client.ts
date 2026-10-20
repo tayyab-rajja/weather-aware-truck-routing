@@ -23,12 +23,16 @@ export async function analyzeRoutes(body: AnalyzeRequest): Promise<AnalyzeRespon
   return data as AnalyzeResponse;
 }
 
-export async function suggestPlaces(q: string): Promise<PlaceSuggestion[]> {
+export async function suggestPlaces(
+  q: string,
+  signal?: AbortSignal,
+): Promise<PlaceSuggestion[]> {
   if (!q.trim()) return [];
   let res: Response;
   try {
-    res = await fetch(`${API_URL}/api/geocode/?q=${encodeURIComponent(q)}`);
-  } catch {
+    res = await fetch(`${API_URL}/api/geocode/?q=${encodeURIComponent(q)}`, { signal });
+  } catch (err) {
+    if (signal?.aborted) throw err;
     return [];
   }
   const data = await res.json().catch(() => ({ results: [] }));
