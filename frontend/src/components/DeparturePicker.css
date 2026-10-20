@@ -9,8 +9,8 @@
   gap: 0.75rem;
   width: 100%;
   border: 1px solid var(--line);
-  border-radius: 6px;
-  background: #fff;
+  border-radius: 2px;
+  background: var(--panel-2);
   padding: 0.7rem 0.85rem;
   font: inherit;
   color: var(--ink);
@@ -19,7 +19,7 @@
 }
 
 .dep-picker__trigger:hover {
-  border-color: #94a3b8;
+  border-color: #4b5c73;
 }
 
 .dep-picker__pop {
@@ -29,10 +29,10 @@
   left: 0;
   right: 0;
   min-width: 300px;
-  background: #fff;
+  background: #101722;
   border: 1px solid var(--line);
-  border-radius: 6px;
-  box-shadow: 0 12px 28px rgba(20, 32, 51, 0.14);
+  border-radius: 2px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
   padding: 0.85rem;
 }
 
@@ -58,14 +58,16 @@
   width: 32px;
   height: 32px;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #fff;
+  border-radius: 2px;
+  background: var(--panel-2);
+  color: var(--ink);
   font-size: 1.1rem;
   cursor: pointer;
 }
 
 .dep-cal__nav strong {
   font-size: 0.95rem;
+  color: var(--ink);
 }
 
 .dep-cal__dow,
@@ -86,15 +88,16 @@
 .dep-cal__day {
   aspect-ratio: 1;
   border: 0;
-  border-radius: 8px;
+  border-radius: 2px;
   background: transparent;
   font: inherit;
   font-size: 0.85rem;
+  color: var(--ink);
   cursor: pointer;
 }
 
 .dep-cal__day:hover {
-  background: #eef3f8;
+  background: #243041;
 }
 
 .dep-cal__day.is-today {
@@ -103,8 +106,8 @@
 
 .dep-cal__day.is-selected {
   background: var(--accent);
-  color: #fff;
-  font-weight: 650;
+  color: #14110a;
+  font-weight: 700;
 }
 
 .dep-cal__empty {
@@ -127,8 +130,8 @@
 
 .dep-clock__readout > button {
   border: 0;
-  background: #eef3f8;
-  border-radius: 6px;
+  background: #243041;
+  border-radius: 2px;
   padding: 0.35rem 0.55rem;
   font-size: 1.55rem;
   font-weight: 700;
@@ -138,13 +141,14 @@
 
 .dep-clock__readout > button.is-active {
   background: var(--accent);
-  color: #fff;
+  color: #14110a;
 }
 
 .dep-clock__readout > span {
   font-size: 1.55rem;
   font-weight: 700;
   padding: 0 0.1rem;
+  color: var(--ink);
 }
 
 .dep-ampm {
@@ -156,18 +160,19 @@
 
 .dep-ampm button {
   border: 1px solid var(--line);
-  background: #fff;
-  border-radius: 6px;
+  background: var(--panel-2);
+  border-radius: 2px;
   padding: 0.2rem 0.45rem;
   font-size: 0.72rem;
   font-weight: 700;
   cursor: pointer;
+  color: var(--ink);
 }
 
 .dep-ampm button.is-active {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: #14110a;
 }
 
 .dep-clock {
@@ -177,8 +182,8 @@
 }
 
 .dep-clock__face {
-  fill: #f7f9fc;
-  stroke: #c5d0dc;
+  fill: #1c2533;
+  stroke: #2a3545;
   stroke-width: 1.5;
 }
 
@@ -198,7 +203,7 @@
 }
 
 .dep-clock__num-bg.is-selected + .dep-clock__num {
-  fill: #fff;
+  fill: #14110a;
 }
 
 .dep-clock__hand {
@@ -223,21 +228,25 @@
 }
 
 .dep-btn {
-  border-radius: 6px;
+  border-radius: 2px;
   padding: 0.5rem 1rem;
   font: inherit;
-  font-weight: 650;
+  font-weight: 700;
   cursor: pointer;
 }
 
 .dep-btn.ghost {
   border: 1px solid var(--line);
-  background: #fff;
+  background: transparent;
   color: var(--muted);
 }
 
 .dep-btn.primary {
   border: 0;
   background: var(--accent);
-  color: #f8fafc;
+  color: #14110a;
+  width: auto;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  box-shadow: none;
 }
