@@ -12,7 +12,9 @@ interface Props {
 export function LocationInput({ id, label, value, onChange }: Props) {
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
   const [open, setOpen] = useState(false);
+  const [hint, setHint] = useState<string | null>(null);
   const timer = useRef<number | null>(null);
+  const reqId = useRef(0);
 
   useEffect(() => {
     return () => {
@@ -22,11 +24,29 @@ export function LocationInput({ id, label, value, onChange }: Props) {
 
   function handleType(next: string) {
     onChange(next, undefined);
+    setHint(null);
     if (timer.current) window.clearTimeout(timer.current);
+
+    if (!next.trim()) {
+      setSuggestions([]);
+      setOpen(false);
+      return;
+    }
+
+    const idNow = ++reqId.current;
     timer.current = window.setTimeout(async () => {
-      const results = await suggestPlaces(next);
-      setSuggestions(results);
-      setOpen(results.length > 0);
+      try {
+        const results = await suggestPlaces(next);
+        if (idNow !== reqId.current) return;
+        setSuggestions(results);
+        setOpen(results.length > 0);
+        setHint(results.length === 0 ? "No matching places" : null);
+      } catch {
+        if (idNow !== reqId.current) return;
+        setSuggestions([]);
+        setOpen(false);
+        setHint("Place search unavailable");
+      }
     }, 280);
   }
 
@@ -39,20 +59,24 @@ export function LocationInput({ id, label, value, onChange }: Props) {
         autoComplete="off"
         placeholder="City or place"
         onChange={(e) => handleType(e.target.value)}
-        onBlur={() => window.setTimeout(() => setOpen(false), 150)}
-        onFocus={() => suggestions.length && setOpen(true)}
+        onBlur={() => window.setTimeout(() => setOpen(false), 180)}
+        onFocus={() => {
+          if (suggestions.length) setOpen(true);
+        }}
       />
-      {open && (
-        <ul className="suggest">
+      {open && suggestions.length > 0 && (
+        <ul className="suggest" role="listbox">
           {suggestions.map((s) => (
-            <li key={`${s.label}-${s.lng}`}>
+            <li key={`${s.label}-${s.lng}-${s.lat}`}>
               <button
                 type="button"
+                role="option"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
                   onChange(s.label, [s.lng, s.lat]);
                   setOpen(false);
                   setSuggestions([]);
+                  setHint(null);
                 }}
               >
                 {s.label}
@@ -61,6 +85,7 @@ export function LocationInput({ id, label, value, onChange }: Props) {
           ))}
         </ul>
       )}
+      {hint && !open && <p className="field-hint">{hint}</p>}
     </label>
   );
 }

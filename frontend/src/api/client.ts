@@ -1,13 +1,21 @@
 import type { AnalyzeRequest, AnalyzeResponse, PlaceSuggestion } from "../types";
 
-const API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") || "http://localhost:8000";
+const API_URL =
+  (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ||
+  "http://127.0.0.1:8000";
 
 export async function analyzeRoutes(body: AnalyzeRequest): Promise<AnalyzeResponse> {
-  const res = await fetch(`${API_URL}/api/analyze/`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/api/analyze/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new Error("Cannot reach API. Is the backend running on port 8000?");
+  }
+
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error((data as { detail?: string }).detail || `Request failed (${res.status})`);
@@ -17,7 +25,12 @@ export async function analyzeRoutes(body: AnalyzeRequest): Promise<AnalyzeRespon
 
 export async function suggestPlaces(q: string): Promise<PlaceSuggestion[]> {
   if (!q.trim()) return [];
-  const res = await fetch(`${API_URL}/api/geocode/?q=${encodeURIComponent(q)}`);
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/api/geocode/?q=${encodeURIComponent(q)}`);
+  } catch {
+    return [];
+  }
   const data = await res.json().catch(() => ({ results: [] }));
   if (!res.ok) return [];
   return (data as { results: PlaceSuggestion[] }).results || [];

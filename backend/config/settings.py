@@ -92,6 +92,17 @@ CORS_ALLOWED_ORIGINS = [
     for o in os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173").split(",")
     if o.strip()
 ]
+if DEBUG:
+    # Local Vite may bind to localhost or 127.0.0.1 on 5173/5174
+    CORS_ALLOWED_ORIGINS = list(
+        {
+            *CORS_ALLOWED_ORIGINS,
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:5174",
+            "http://127.0.0.1:5174",
+        }
+    )
 
 REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
